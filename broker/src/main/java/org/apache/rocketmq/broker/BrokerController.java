@@ -541,6 +541,7 @@ public class BrokerController {
         }
     }
 
+    // 注册执行器 请求编码，执行器  利用list集合存放回调方法类
     public void registerProcessor() {
         /**
          * SendMessageProcessor

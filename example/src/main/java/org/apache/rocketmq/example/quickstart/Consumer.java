@@ -37,7 +37,7 @@ public class Consumer {
          * Instantiate with specified consumer group name.
          */
         DefaultMQPushConsumer consumer = new DefaultMQPushConsumer(CONSUMER_GROUP);
-
+        consumer.setNamesrvAddr(DEFAULT_NAMESRVADDR);
         /*
          * Specify name server addresses.
          * <p/>
@@ -67,7 +67,11 @@ public class Consumer {
          */
         consumer.registerMessageListener((MessageListenerConcurrently) (msg, context) -> {
             System.out.printf("%s Receive New Messages: %s %n", Thread.currentThread().getName(), msg);
-            return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
+            int i= 1;
+            if(i == 1){
+                throw new RuntimeException();
+            }
+           return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
         });
 
         /*

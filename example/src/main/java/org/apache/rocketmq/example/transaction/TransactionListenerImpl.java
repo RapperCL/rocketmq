@@ -16,6 +16,7 @@
  */
 package org.apache.rocketmq.example.transaction;
 
+import com.alibaba.fastjson.JSONObject;
 import org.apache.rocketmq.client.producer.LocalTransactionState;
 import org.apache.rocketmq.client.producer.TransactionListener;
 import org.apache.rocketmq.common.message.Message;
@@ -32,26 +33,27 @@ public class TransactionListenerImpl implements TransactionListener {
     @Override
     public LocalTransactionState executeLocalTransaction(Message msg, Object arg) {
         int value = transactionIndex.getAndIncrement();
-        int status = value % 3;
+        int status = value < 10? 0: 1;
         localTrans.put(msg.getTransactionId(), status);
         return LocalTransactionState.UNKNOW;
     }
 
     @Override
     public LocalTransactionState checkLocalTransaction(MessageExt msg) {
+        System.out.println("checkLocalTransaction :{}" + JSONObject.toJSONString(msg));
         Integer status = localTrans.get(msg.getTransactionId());
-        if (null != status) {
-            switch (status) {
-                case 0:
-                    return LocalTransactionState.UNKNOW;
-                case 1:
-                    return LocalTransactionState.COMMIT_MESSAGE;
-                case 2:
-                    return LocalTransactionState.ROLLBACK_MESSAGE;
-                default:
-                    return LocalTransactionState.COMMIT_MESSAGE;
-            }
-        }
-        return LocalTransactionState.COMMIT_MESSAGE;
+//        if (null != status) {
+//            switch (status) {
+//                case 0:
+//                    return LocalTransactionState.UNKNOW;
+//                case 1:
+//                    return LocalTransactionState.COMMIT_MESSAGE;
+//                case 2:
+//                    return LocalTransactionState.ROLLBACK_MESSAGE;
+//                default:
+//                    return LocalTransactionState.COMMIT_MESSAGE;
+//            }
+//        }
+        return LocalTransactionState.UNKNOW;
     }
 }

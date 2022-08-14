@@ -73,6 +73,7 @@ public class TransactionalMessageBridge {
     }
 
     public long fetchConsumeOffset(MessageQueue mq) {
+        // 查询 队列的offset
         long offset = brokerController.getConsumerOffsetManager().queryOffset(TransactionalMessageUtil.buildConsumerGroup(),
             mq.getTopic(), mq.getQueueId());
         if (offset == -1) {
@@ -195,7 +196,7 @@ public class TransactionalMessageBridge {
     public PutMessageResult putHalfMessage(MessageExtBrokerInner messageInner) {
         return store.putMessage(parseHalfMessageInner(messageInner));
     }
-
+    // todo 0813 事务消息相比其他消息，在写入时会进行一次包装转换，隐藏真实主题和队列id
     public CompletableFuture<PutMessageResult> asyncPutHalfMessage(MessageExtBrokerInner messageInner) {
         return store.asyncPutMessage(parseHalfMessageInner(messageInner));
     }
@@ -279,6 +280,7 @@ public class TransactionalMessageBridge {
         msgInner.setQueueId(messageQueue.getQueueId());
         msgInner.setTags(message.getTags());
         msgInner.setTagsCode(MessageExtBrokerInner.tagsString2tagsCode(msgInner.getTags()));
+        // 消息标识置为0
         msgInner.setSysFlag(0);
         MessageAccessor.setProperties(msgInner, message.getProperties());
         msgInner.setPropertiesString(MessageDecoder.messageProperties2String(message.getProperties()));
@@ -308,6 +310,7 @@ public class TransactionalMessageBridge {
      * @return This method will always return true.
      */
     private boolean addRemoveTagInTransactionOp(MessageExt prepareMessage, MessageQueue messageQueue) {
+        //todo 0813 重要标识 将tag设置为移除
         Message message = new Message(TransactionalMessageUtil.buildOpTopic(), TransactionalMessageUtil.REMOVETAG,
             String.valueOf(prepareMessage.getQueueOffset()).getBytes(TransactionalMessageUtil.charset));
         writeOp(message, messageQueue);
@@ -328,6 +331,7 @@ public class TransactionalMessageBridge {
         if (opQueue == null) {
             opQueue = new MessageQueue(TransactionalMessageUtil.buildOpTopic(), mq.getBrokerName(), mq.getQueueId());
         }
+        // 将消息转换为内部消息，然后写入
         putMessage(makeOpMessageInner(message, opQueue));
     }
 

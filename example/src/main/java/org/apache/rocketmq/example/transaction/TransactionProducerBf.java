@@ -1,19 +1,3 @@
-/*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 package org.apache.rocketmq.example.transaction;
 
 import org.apache.rocketmq.client.exception.MQClientException;
@@ -29,20 +13,17 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-public class TransactionProducer {
-
-    public static final String PRODUCER_GROUP = "please_rename_unique_group_name";
+public class TransactionProducerBf {
+    public static final String PRODUCER_GROUP = "PRODUCER_GROUP_Topic_buffer";
     public static final String DEFAULT_NAMESRVADDR = "127.0.0.1:9876";
-    public static final String TOPIC = "Topic_buffer_test";
+    public static final String TOPIC = "Topic_buffer";
 
-    public static final int MESSAGE_COUNT = 10;
+    public static final int MESSAGE_COUNT = 100;
 
     public static void main(String[] args) throws MQClientException, InterruptedException {
-        TransactionListener transactionListener = new TransactionListenerImpl();
+        TransactionListener transactionListener = new TransactionListenerBfImpl();
         TransactionMQProducer producer = new TransactionMQProducer(PRODUCER_GROUP);
 
-        // Uncomment the following line while debugging, namesrvAddr should be set to your local address
-//        producer.setNamesrvAddr(DEFAULT_NAMESRVADDR);
         ExecutorService executorService = new ThreadPoolExecutor(2, 5, 100, TimeUnit.SECONDS, new ArrayBlockingQueue<>(2000), r -> {
             Thread thread = new Thread(r);
             thread.setName("client-transaction-msg-check-thread");
@@ -53,16 +34,15 @@ public class TransactionProducer {
         producer.setTransactionListener(transactionListener);
         producer.setNamesrvAddr(DEFAULT_NAMESRVADDR);
         producer.start();
-        String[] tags = new String[] {"TagA", "TagB", "TagC", "TagD", "TagE"};
+
         for (int i = 0; i < MESSAGE_COUNT; i++) {
             try {
                 Message msg =
-                    new Message(TOPIC, tags[i % tags.length], "KEY" + i,
-                        ("Hello RocketMQ " + i).getBytes(RemotingHelper.DEFAULT_CHARSET));
+                        new Message(TOPIC,  "", "KEY" + i,
+                                ("Hello RocketMQ " + i).getBytes(RemotingHelper.DEFAULT_CHARSET));
                 SendResult sendResult = producer.sendMessageInTransaction(msg, null);
                 System.out.printf("%s%n", sendResult);
 
-                Thread.sleep(10);
             } catch (MQClientException | UnsupportedEncodingException e) {
                 e.printStackTrace();
             }

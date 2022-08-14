@@ -37,6 +37,7 @@ public class ConsumerOffsetManager extends ConfigManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.BROKER_LOGGER_NAME);
     protected static final String TOPIC_GROUP_SEPARATOR = "@";
 
+    //  topic@group ，  queueid, offset
     protected ConcurrentMap<String/* topic@group */, ConcurrentMap<Integer, Long>> offsetTable =
         new ConcurrentHashMap<String, ConcurrentMap<Integer, Long>>(512);
 
@@ -138,7 +139,7 @@ public class ConsumerOffsetManager extends ConfigManager {
             }
         }
     }
-
+   // 根据topic@group ，queueid，查询位移，这里的位移指的是cqoffset 还是phyoffset呢？ 应该是cq的offset
     public long queryOffset(final String group, final String topic, final int queueId) {
         // topic@group
         String key = topic + TOPIC_GROUP_SEPARATOR + group;

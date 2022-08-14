@@ -22,6 +22,9 @@ import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 
+/**
+ * 我想这个类应该就是检查事务消息的服务了
+ */
 public class TransactionalMessageCheckService extends ServiceThread {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.TRANSACTION_LOGGER_NAME);
 
@@ -39,6 +42,7 @@ public class TransactionalMessageCheckService extends ServiceThread {
     @Override
     public void run() {
         log.info("Start transaction check service thread!");
+        //todo 0813 默认60s进行一次检查，为什么不是异步检查？
         long checkInterval = brokerController.getBrokerConfig().getTransactionCheckInterval();
         while (!this.isStopped()) {
             this.waitForRunning(checkInterval);
@@ -49,6 +53,7 @@ public class TransactionalMessageCheckService extends ServiceThread {
     @Override
     protected void onWaitEnd() {
         long timeout = brokerController.getBrokerConfig().getTransactionTimeOut();
+        // 事务消息的最大检测次数
         int checkMax = brokerController.getBrokerConfig().getTransactionCheckMax();
         long begin = System.currentTimeMillis();
         log.info("Begin to check prepare message, begin time:{}", begin);

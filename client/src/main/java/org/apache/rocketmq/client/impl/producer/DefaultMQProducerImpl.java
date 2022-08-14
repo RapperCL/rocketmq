@@ -540,6 +540,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         final long timeout
     ) throws MQClientException, RemotingException, MQBrokerException, InterruptedException {
         this.makeSureStateOK();
+        // todo 0812 再次检查消息
         Validators.checkMessage(msg, this.defaultMQProducer);
         final long invokeID = random.nextLong();
         long beginTimestampFirst = System.currentTimeMillis();
@@ -551,10 +552,13 @@ public class DefaultMQProducerImpl implements MQProducerInner {
             MessageQueue mq = null;
             Exception exception = null;
             SendResult sendResult = null;
+            // 同步消息的 默认是3次
             int timesTotal = communicationMode == CommunicationMode.SYNC ? 1 + this.defaultMQProducer.getRetryTimesWhenSendFailed() : 1;
             int times = 0;
             String[] brokersSent = new String[timesTotal];
+            // 失败重试发送实现
             for (; times < timesTotal; times++) {
+                // 第一次为空，二次发送时，如果未开启容错机制，那就不会选择这个brokerName，只有在集群模式下 起作用
                 String lastBrokerName = null == mq ? null : mq.getBrokerName();
                 MessageQueue mqSelected = this.selectOneMessageQueue(topicPublishInfo, lastBrokerName);
                 if (mqSelected != null) {
@@ -567,9 +571,10 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                             msg.setTopic(this.defaultMQProducer.withNamespace(msg.getTopic()));
                         }
                         long costTime = beginTimestampPrev - beginTimestampFirst;
+                       //   // todo 移除超时 测试使用
                         if (timeout < costTime) {
                             callTimeout = true;
-                            break;
+                           // break;
                         }
 
                         sendResult = this.sendKernelImpl(msg, mq, communicationMode, sendCallback, topicPublishInfo, timeout - costTime);
@@ -668,6 +673,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
             null).setResponseCode(ClientErrorCode.NOT_FOUND_TOPIC_EXCEPTION);
     }
 
+    // 主题发布信息
     private TopicPublishInfo tryToFindTopicPublishInfo(final String topic) {
         TopicPublishInfo topicPublishInfo = this.topicPublishInfoTable.get(topic);
         if (null == topicPublishInfo || !topicPublishInfo.ok()) {
@@ -760,7 +766,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                     }
                     this.executeSendMessageHookBefore(context);
                 }
-
+                // 设置发送请求体
                 SendMessageRequestHeader requestHeader = new SendMessageRequestHeader();
                 requestHeader.setProducerGroup(this.defaultMQProducer.getProducerGroup());
                 requestHeader.setTopic(msg.getTopic());
@@ -831,9 +837,9 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                     case ONEWAY:
                     case SYNC:
                         long costTimeSync = System.currentTimeMillis() - beginStartTime;
-                        if (timeout < costTimeSync) {
-                            throw new RemotingTooMuchRequestException("sendKernelImpl call timeout");
-                        }
+//                        if (timeout < costTimeSync) {
+//                            throw new RemotingTooMuchRequestException("sendKernelImpl call timeout");
+//                        }
                         sendResult = this.mQClientFactory.getMQClientAPIImpl().sendMessage(
                             brokerAddr,
                             mq.getBrokerName(),
@@ -1216,7 +1222,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
             throw new MQClientException("unknown exception", e);
         }
     }
-
+    // 事务消息发送
     public TransactionSendResult sendMessageInTransaction(final Message msg,
         final LocalTransactionExecuter localTransactionExecuter, final Object arg)
         throws MQClientException {
@@ -1225,7 +1231,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
             throw new MQClientException("tranExecutor is null", null);
         }
 
-        // ignore DelayTimeLevel parameter
+        // ignore DelayTimeLevel parameter  事务消息不支持延迟
         if (msg.getDelayTimeLevel() != 0) {
             MessageAccessor.clearProperty(msg, MessageConst.PROPERTY_DELAY_TIME_LEVEL);
         }
@@ -1243,6 +1249,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
 
         LocalTransactionState localTransactionState = LocalTransactionState.UNKNOW;
         Throwable localException = null;
+        // 发送之后，进行状态检查
         switch (sendResult.getSendStatus()) {
             case SEND_OK: {
                 try {
@@ -1256,6 +1263,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                     if (null != localTransactionExecuter) {
                         localTransactionState = localTransactionExecuter.executeLocalTransactionBranch(msg, arg);
                     } else if (transactionListener != null) {
+                        // 执行监听
                         log.debug("Used new transaction API");
                         localTransactionState = transactionListener.executeLocalTransaction(msg, arg);
                     }
@@ -1274,6 +1282,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
                 }
             }
             break;
+            // 刷盘失败，从服务失败或者从节点不可用都会中断此次事务消息
             case FLUSH_DISK_TIMEOUT:
             case FLUSH_SLAVE_TIMEOUT:
             case SLAVE_NOT_AVAILABLE:
@@ -1306,7 +1315,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         Message msg) throws MQClientException, RemotingException, MQBrokerException, InterruptedException {
         return send(msg, this.defaultMQProducer.getSendMsgTimeout());
     }
-
+    //
     public void endTransaction(
         final Message msg,
         final SendResult sendResult,
@@ -1336,9 +1345,10 @@ public class DefaultMQProducerImpl implements MQProducerInner {
             default:
                 break;
         }
-
+        // 回调
         doExecuteEndTransactionHook(msg, sendResult.getMsgId(), brokerAddr, localTransactionState, false);
         requestHeader.setProducerGroup(this.defaultMQProducer.getProducerGroup());
+        // 队列的偏移量 half 消息队列0的偏移量
         requestHeader.setTranStateTableOffset(sendResult.getQueueOffset());
         requestHeader.setMsgId(sendResult.getMsgId());
         String remark = localException != null ? ("executeLocalTransactionBranch exception: " + localException.toString()) : null;

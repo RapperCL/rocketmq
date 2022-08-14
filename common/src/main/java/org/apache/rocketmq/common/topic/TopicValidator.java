@@ -113,7 +113,7 @@ public class TopicValidator {
             response.setRemark("The specified topic contains illegal characters, allowing only ^[%|a-zA-Z0-9_-]+$");
             return false;
         }
-
+         //todo 0811 发送之前，已经对主题长度做了校验 设计的不够优雅，为什么不通过工具去做
         if (topic.length() > TOPIC_MAX_LENGTH) {
             response.setCode(ResponseCode.SYSTEM_ERROR);
             response.setRemark("The specified topic is longer than topic max length.");

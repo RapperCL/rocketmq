@@ -80,7 +80,7 @@ public class Validators {
         if (UtilAll.isBlank(topic)) {
             throw new MQClientException("The specified topic is blank", null);
         }
-
+       // todo 0812 再次检查主题长度
         if (topic.length() > TOPIC_MAX_LENGTH) {
             throw new MQClientException(
                 String.format("The specified topic is longer than topic max length %d.", TOPIC_MAX_LENGTH), null);

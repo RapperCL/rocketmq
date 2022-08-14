@@ -149,6 +149,8 @@ public abstract class NettyRemotingAbstract {
      * @param ctx Channel handler context.
      * @param msg incoming remoting command.
      * @throws Exception if there were any error while processing the incoming command.
+     *
+     * todo 0807 通道获取到请求后，进行处理
      */
     public void processMessageReceived(ChannelHandlerContext ctx, RemotingCommand msg) throws Exception {
         final RemotingCommand cmd = msg;
@@ -190,10 +192,11 @@ public abstract class NettyRemotingAbstract {
      * @param cmd request command.
      */
     public void processRequestCommand(final ChannelHandlerContext ctx, final RemotingCommand cmd) {
+        // 获取到请求之后， 从处理器标中根据code获取到处理器。
         final Pair<NettyRequestProcessor, ExecutorService> matched = this.processorTable.get(cmd.getCode());
         final Pair<NettyRequestProcessor, ExecutorService> pair = null == matched ? this.defaultRequestProcessor : matched;
         final int opaque = cmd.getOpaque();
-
+        // todo make processor and executorService into pair， Use the threadpool to complete the business of the proceesor
         if (pair != null) {
             Runnable run = new Runnable() {
                 @Override
@@ -224,8 +227,10 @@ public abstract class NettyRemotingAbstract {
                         };
                         if (pair.getObject1() instanceof AsyncNettyRequestProcessor) {
                             AsyncNettyRequestProcessor processor = (AsyncNettyRequestProcessor)pair.getObject1();
+                            // 传入callBack对象，执行回调
                             processor.asyncProcessRequest(ctx, cmd, callback);
                         } else {
+                            // 执行对应的处理
                             NettyRequestProcessor processor = pair.getObject1();
                             RemotingCommand response = processor.processRequest(ctx, cmd);
                             callback.callback(response);
@@ -253,7 +258,9 @@ public abstract class NettyRemotingAbstract {
             }
 
             try {
+                // package task
                 final RequestTask requestTask = new RequestTask(run, ctx.channel(), cmd);
+                // user the threadpool
                 pair.getObject2().submit(requestTask);
             } catch (RejectedExecutionException e) {
                 if ((System.currentTimeMillis() % 10000) == 0) {

@@ -29,7 +29,7 @@ public class TransactionMQProducer extends DefaultMQProducer {
     private int checkRequestHoldMax = 2000;
 
     private ExecutorService executorService;
-
+    // 事务监听者
     private TransactionListener transactionListener;
 
     public TransactionMQProducer() {

@@ -213,4 +213,5 @@ public class TransactionalMessageBridgeTest {
         inner.setTopic("hello");
         return inner;
     }
+
 }

@@ -220,6 +220,7 @@ public class IndexService {
             }
 
             if (req.getUniqKey() != null) {
+                // 写入索引  indexHeader， hashSlot 500W， index
                 indexFile = putKey(indexFile, msg, buildKey(topic, req.getUniqKey()));
                 if (indexFile == null) {
                     log.error("putKey error commitlog {} uniqkey {}", req.getCommitLogOffset(), req.getUniqKey());

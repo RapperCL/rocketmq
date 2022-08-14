@@ -85,7 +85,7 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor {
     public void asyncProcessRequest(ChannelHandlerContext ctx, RemotingCommand request, RemotingResponseCallback responseCallback) throws Exception {
         asyncProcessRequest(ctx, request).thenAcceptAsync(responseCallback::callback, this.brokerController.getPutMessageFutureExecutor());
     }
-
+    // 异步处理客户端请求
     public CompletableFuture<RemotingCommand> asyncProcessRequest(ChannelHandlerContext ctx,
                                                                   RemotingCommand request) throws RemotingCommandException {
         final SendMessageContext mqtraceContext;
@@ -187,7 +187,7 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor {
                 maxReconsumeTimes = times;
             }
         }
-
+        // 重复消费达到了最大消费次数
         if (msgExt.getReconsumeTimes() >= maxReconsumeTimes
             || delayLevel < 0) {
             newTopic = MixAll.getDLQTopic(requestHeader.getGroup());
@@ -277,11 +277,11 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor {
 
         int queueIdInt = requestHeader.getQueueId();
         TopicConfig topicConfig = this.brokerController.getTopicConfigManager().selectTopicConfig(requestHeader.getTopic());
-
+        // 未指定队列id就随机选择一个
         if (queueIdInt < 0) {
             queueIdInt = randomQueueId(topicConfig.getWriteQueueNums());
         }
-
+        //基于msg构建内部消息结构体
         MessageExtBrokerInner msgInner = new MessageExtBrokerInner();
         msgInner.setTopic(requestHeader.getTopic());
         msgInner.setQueueId(queueIdInt);

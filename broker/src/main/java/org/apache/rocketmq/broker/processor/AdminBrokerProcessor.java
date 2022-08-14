@@ -583,6 +583,7 @@ public class AdminBrokerProcessor extends AsyncNettyRequestProcessor {
         final SearchOffsetRequestHeader requestHeader =
             (SearchOffsetRequestHeader) request.decodeCommandCustomHeader(SearchOffsetRequestHeader.class);
 
+        // 原来查询 cqoffset是通过时间戳进行查找的 ？
         long offset = this.brokerController.getMessageStore().getOffsetInQueueByTime(requestHeader.getTopic(), requestHeader.getQueueId(),
             requestHeader.getTimestamp());
 

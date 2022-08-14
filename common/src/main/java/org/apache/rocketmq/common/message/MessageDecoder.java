@@ -287,7 +287,7 @@ public class MessageDecoder {
             // 2 MAGICCODE
             byteBuffer.getInt();
 
-            // 3 BODYCRC
+            // 3 BODYCRC 消息压缩编码
             int bodyCRC = byteBuffer.getInt();
             msgExt.setBodyCRC(bodyCRC);
 

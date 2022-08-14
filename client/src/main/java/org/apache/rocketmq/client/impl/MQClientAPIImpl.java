@@ -499,9 +499,10 @@ public class MQClientAPIImpl {
                 return null;
             case SYNC:
                 long costTimeSync = System.currentTimeMillis() - beginStartTime;
-                if (timeoutMillis < costTimeSync) {
-                    throw new RemotingTooMuchRequestException("sendMessage call timeout");
-                }
+                // todo 移除超时 测试使用
+//                if (timeoutMillis < costTimeSync) {
+//                    throw new RemotingTooMuchRequestException("sendMessage call timeout");
+//                }
                 return this.sendMessageSync(addr, brokerName, msg, timeoutMillis - costTimeSync, request);
             default:
                 assert false;
@@ -1071,7 +1072,7 @@ public class MQClientAPIImpl {
         final long timeoutMillis
     ) throws RemotingException, InterruptedException {
         RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.END_TRANSACTION, requestHeader);
-
+        log.info("endTransactionOneway 发送事务处理结果，request:{}", request);
         request.setRemark(remark);
         this.remotingClient.invokeOneway(addr, request, timeoutMillis);
     }

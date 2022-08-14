@@ -52,7 +52,7 @@ public abstract class ReferenceResource {
             }
         }
     }
-
+    // no one use, it will release
     public void release() {
         long value = this.refCount.decrementAndGet();
         if (value > 0)

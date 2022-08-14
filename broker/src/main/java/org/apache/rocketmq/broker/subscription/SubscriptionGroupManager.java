@@ -117,6 +117,7 @@ public class SubscriptionGroupManager extends ConfigManager {
         }
     }
 
+    // todo 0811 订阅组是什么概念
     public SubscriptionGroupConfig findSubscriptionGroupConfig(final String group) {
         SubscriptionGroupConfig subscriptionGroupConfig = this.subscriptionGroupTable.get(group);
         if (null == subscriptionGroupConfig) {

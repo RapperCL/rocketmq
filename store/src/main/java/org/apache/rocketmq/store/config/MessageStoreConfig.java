@@ -50,7 +50,7 @@ public class MessageStoreConfig {
     // this will be set by pipe of calculate filter bit map.
     private int bitMapLengthConsumeQueueExt = 64;
 
-    // CommitLog flush interval
+    // CommitLog flush interval 异步磁盘刷入间隔
     // flush data to disk
     @ImportantField
     private int flushIntervalCommitLog = 500;
@@ -94,6 +94,7 @@ public class MessageStoreConfig {
     // This check adds some overhead,so it may be disabled in cases seeking extreme performance.
     private boolean checkCRCOnRecover = true;
     // How many pages are to be flushed when flush CommitLog
+    // flushed page nums
     private int flushCommitLogLeastPages = 4;
     // How many pages are to be committed when commit data to file
     private int commitCommitLogLeastPages = 4;

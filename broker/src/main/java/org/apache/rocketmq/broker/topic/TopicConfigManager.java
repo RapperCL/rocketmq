@@ -46,7 +46,7 @@ public class TopicConfigManager extends ConfigManager {
     private static final int SCHEDULE_TOPIC_QUEUE_NUM = 18;
 
     private transient final Lock topicConfigTableLock = new ReentrantLock();
-
+  // topic, topicConfig
     private final ConcurrentMap<String, TopicConfig> topicConfigTable =
         new ConcurrentHashMap<String, TopicConfig>(1024);
     private final DataVersion dataVersion = new DataVersion();
@@ -159,6 +159,7 @@ public class TopicConfigManager extends ConfigManager {
         boolean createNew = false;
 
         try {
+            // 防止并发
             if (this.topicConfigTableLock.tryLock(LOCK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
                 try {
                     topicConfig = this.topicConfigTable.get(topic);
@@ -167,21 +168,23 @@ public class TopicConfigManager extends ConfigManager {
 
                     TopicConfig defaultTopicConfig = this.topicConfigTable.get(defaultTopic);
                     if (defaultTopicConfig != null) {
+                        // 默认自动创建主题
                         if (defaultTopic.equals(TopicValidator.AUTO_CREATE_TOPIC_KEY_TOPIC)) {
                             if (!this.brokerController.getBrokerConfig().isAutoCreateTopicEnable()) {
+                                // 6
                                 defaultTopicConfig.setPerm(PermName.PERM_READ | PermName.PERM_WRITE);
                             }
                         }
-
+                         // 101 & 1 = 1
                         if (PermName.isInherited(defaultTopicConfig.getPerm())) {
                             topicConfig = new TopicConfig(topic);
-
+                            // 队列数量，默认去客户端默认的个数，16 ，最大不超过16个
                             int queueNums = Math.min(clientDefaultTopicQueueNums, defaultTopicConfig.getWriteQueueNums());
 
                             if (queueNums < 0) {
                                 queueNums = 0;
                             }
-
+                            // 读写队列个数设置，大小一样
                             topicConfig.setReadQueueNums(queueNums);
                             topicConfig.setWriteQueueNums(queueNums);
                             int perm = defaultTopicConfig.getPerm();
@@ -217,7 +220,7 @@ public class TopicConfigManager extends ConfigManager {
         } catch (InterruptedException e) {
             log.error("createTopicInSendMessageMethod exception", e);
         }
-
+        // 创建了新主题信息，注册到namesrc中，基于netty实现网络通信
         if (createNew) {
             this.brokerController.registerBrokerAll(false, true, true);
         }
@@ -269,6 +272,13 @@ public class TopicConfigManager extends ConfigManager {
         return topicConfig;
     }
 
+    /**
+     * todo 0813 将被丢弃的消息写入 TRANS_CHECK_MAX_TIME_TOPIC
+     * 队列个数默认为1 perm = 110= 6
+     * @param clientDefaultTopicQueueNums
+     * @param perm
+     * @return
+     */
     public TopicConfig createTopicOfTranCheckMaxTime(final int clientDefaultTopicQueueNums, final int perm) {
         TopicConfig topicConfig = this.topicConfigTable.get(TopicValidator.RMQ_SYS_TRANS_CHECK_MAX_TIME_TOPIC);
         if (topicConfig != null)
@@ -293,6 +303,7 @@ public class TopicConfigManager extends ConfigManager {
                     this.topicConfigTable.put(TopicValidator.RMQ_SYS_TRANS_CHECK_MAX_TIME_TOPIC, topicConfig);
                     createNew = true;
                     this.dataVersion.nextVersion();
+                    //
                     this.persist();
                 } finally {
                     this.topicConfigTableLock.unlock();

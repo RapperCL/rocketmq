@@ -36,7 +36,7 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
             final FaultItem faultItem = new FaultItem(name);
             faultItem.setCurrentLatency(currentLatency);
             faultItem.setStartTimestamp(System.currentTimeMillis() + notAvailableDuration);
-
+            // 如果以前存在，那么就重新设置， 避免了加锁
             old = this.faultItemTable.putIfAbsent(name, faultItem);
             if (old != null) {
                 old.setCurrentLatency(currentLatency);
@@ -50,6 +50,7 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
 
     @Override
     public boolean isAvailable(final String name) {
+        // 获取容错项 ，判断这个容错项是否可用
         final FaultItem faultItem = this.faultItemTable.get(name);
         if (faultItem != null) {
             return faultItem.isAvailable();
@@ -73,9 +74,11 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
         if (!tmpList.isEmpty()) {
             Collections.sort(tmpList);
             final int half = tmpList.size() / 2;
+            // 只有一个时，直接取即可
             if (half <= 0) {
                 return tmpList.get(0).getName();
             } else {
+                // >=2 时，自增取模，取前一半的
                 final int i = this.whichItemWorst.incrementAndGet() % half;
                 return tmpList.get(i).getName();
             }
@@ -126,6 +129,7 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
         }
 
         public boolean isAvailable() {
+            // 当前时间和可用时间进行比较
             return (System.currentTimeMillis() - startTimestamp) >= 0;
         }
 
