@@ -744,7 +744,7 @@ public class DefaultMessageStore implements MessageStore {
                     && nextBeginOffset < maxOffset
                     && cqFileNum++ < this.messageStoreConfig.getTravelCqFileNumWhenGetMessage()) {
                     ReferredIterator<CqUnit> bufferConsumeQueue = consumeQueue.iterateFrom(nextBeginOffset);
-
+                    LOGGER.info("getMessage 遍历消息...");
                     if (bufferConsumeQueue == null) {
                         status = GetMessageStatus.OFFSET_FOUND_NULL;
                         nextBeginOffset = nextOffsetCorrection(nextBeginOffset, this.consumeQueueStore.rollNextFile(consumeQueue, nextBeginOffset));
