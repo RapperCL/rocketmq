@@ -33,16 +33,16 @@ public class TransactionProducer {
 
     public static final String PRODUCER_GROUP = "please_rename_unique_group_name";
     public static final String DEFAULT_NAMESRVADDR = "127.0.0.1:9876";
-    public static final String TOPIC = "TopicTest1234";
+    public static final String TOPIC = "Topic_buffer_test";
 
-    public static final int MESSAGE_COUNT = 10;
+    public static final int MESSAGE_COUNT = 30;
 
     public static void main(String[] args) throws MQClientException, InterruptedException {
         TransactionListener transactionListener = new TransactionListenerImpl();
         TransactionMQProducer producer = new TransactionMQProducer(PRODUCER_GROUP);
 
         // Uncomment the following line while debugging, namesrvAddr should be set to your local address
-//        producer.setNamesrvAddr(DEFAULT_NAMESRVADDR);
+        producer.setNamesrvAddr(DEFAULT_NAMESRVADDR);
         ExecutorService executorService = new ThreadPoolExecutor(2, 5, 100, TimeUnit.SECONDS, new ArrayBlockingQueue<>(2000), r -> {
             Thread thread = new Thread(r);
             thread.setName("client-transaction-msg-check-thread");

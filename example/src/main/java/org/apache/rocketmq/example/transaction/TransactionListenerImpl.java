@@ -39,19 +39,20 @@ public class TransactionListenerImpl implements TransactionListener {
 
     @Override
     public LocalTransactionState checkLocalTransaction(MessageExt msg) {
+        System.out.println("checkLocalTransaction 消息回查");
         Integer status = localTrans.get(msg.getTransactionId());
-        if (null != status) {
-            switch (status) {
-                case 0:
-                    return LocalTransactionState.UNKNOW;
-                case 1:
-                    return LocalTransactionState.COMMIT_MESSAGE;
-                case 2:
-                    return LocalTransactionState.ROLLBACK_MESSAGE;
-                default:
-                    return LocalTransactionState.COMMIT_MESSAGE;
-            }
-        }
-        return LocalTransactionState.COMMIT_MESSAGE;
+//        if (null != status) {
+//            switch (status) {
+//                case 0:
+//                    return LocalTransactionState.UNKNOW;
+//                case 1:
+//                    return LocalTransactionState.COMMIT_MESSAGE;
+//                case 2:
+//                    return LocalTransactionState.ROLLBACK_MESSAGE;
+//                default:
+//                    return LocalTransactionState.COMMIT_MESSAGE;
+//            }
+//        }
+        return LocalTransactionState.UNKNOW;
     }
 }
