@@ -44,8 +44,10 @@ import org.apache.rocketmq.common.protocol.heartbeat.SubscriptionData;
 public abstract class RebalanceImpl {
     protected static final InternalLogger log = ClientLogger.getLog();
     protected final ConcurrentMap<MessageQueue, ProcessQueue> processQueueTable = new ConcurrentHashMap<MessageQueue, ProcessQueue>(64);
+    // 主题和消费逻辑队列
     protected final ConcurrentMap<String/* topic */, Set<MessageQueue>> topicSubscribeInfoTable =
         new ConcurrentHashMap<String, Set<MessageQueue>>();
+    // 存放主题以及订阅者信息
     protected final ConcurrentMap<String /* topic */, SubscriptionData> subscriptionInner =
         new ConcurrentHashMap<String, SubscriptionData>();
     protected String consumerGroup;
@@ -117,6 +119,7 @@ public abstract class RebalanceImpl {
     }
 
     private HashMap<String/* brokerName */, Set<MessageQueue>> buildProcessQueueTableByBrokerName() {
+        // processQueueTable 存放了msgQueue与processQueue映射  生成 brokerName 和 msgQueue的映射
         HashMap<String, Set<MessageQueue>> result = new HashMap<String, Set<MessageQueue>>(this.processQueueTable.size(), 1);
         for (MessageQueue mq : this.processQueueTable.keySet()) {
             Set<MessageQueue> mqs = result.get(mq.getBrokerName());
@@ -165,6 +168,8 @@ public abstract class RebalanceImpl {
     }
 
     public void lockAll() {
+        // 建立brockername， Set<messageQeueu> 存在这个processQueueTable中的队列，都正好是当前消费者需要进行消费的
+        // 队列，所以直接通过brokerName取出对应的Set<MessageQueue>即可，并不是取出topic对应的所有msg
         HashMap<String, Set<MessageQueue>> brokerMqs = this.buildProcessQueueTableByBrokerName();
 
         Iterator<Entry<String, Set<MessageQueue>>> it = brokerMqs.entrySet().iterator();
@@ -175,7 +180,7 @@ public abstract class RebalanceImpl {
 
             if (mqs.isEmpty())
                 continue;
-
+            // 获取对应broker地址
             FindBrokerResult findBrokerResult = this.mQClientFactory.findBrokerAddressInSubscribe(brokerName, MixAll.MASTER_ID, true);
             if (findBrokerResult != null) {
                 LockBatchRequestBody requestBody = new LockBatchRequestBody();
@@ -184,29 +189,50 @@ public abstract class RebalanceImpl {
                 requestBody.setMqSet(mqs);
 
                 try {
+                    // 发起锁定， 将这个主题下的这些msg，交给消费组下的这个clientid进行处理，
+                    // 并返回锁住成功的messageQueue
+                    // todo broker端 加锁的过期时间默认是60s
                     Set<MessageQueue> lockOKMQSet =
                         this.mQClientFactory.getMQClientAPIImpl().lockBatchMQ(findBrokerResult.getBrokerAddr(), requestBody, 1000);
 
-                    for (MessageQueue mq : lockOKMQSet) {
+                    long ts = System.currentTimeMillis();
+                    for(MessageQueue mq : mqs){
                         ProcessQueue processQueue = this.processQueueTable.get(mq);
-                        if (processQueue != null) {
-                            if (!processQueue.isLocked()) {
-                                log.info("the message queue locked OK, Group: {} {}", this.consumerGroup, mq);
-                            }
-
-                            processQueue.setLocked(true);
-                            processQueue.setLastLockTimestamp(System.currentTimeMillis());
-                        }
-                    }
-                    for (MessageQueue mq : mqs) {
-                        if (!lockOKMQSet.contains(mq)) {
-                            ProcessQueue processQueue = this.processQueueTable.get(mq);
-                            if (processQueue != null) {
-                                processQueue.setLocked(false);
-                                log.warn("the message queue locked Failed, Group: {} {}", this.consumerGroup, mq);
+                        if(processQueue != null){
+                            if(lockOKMQSet.contains(mq)){
+                               if(!processQueue.isLocked()){
+                                   log.info("the message queue locked OK, Group: {} {}", this.consumerGroup, mq);
+                               }
+                               processQueue.setLocked(true);
+                               processQueue.setLastLockTimestamp(ts);
+                            }else{
+                              processQueue.setLocked(false);
+                              log.warn("the message queue locked Failed, Group: {} {}", this.consumerGroup, mq);
                             }
                         }
                     }
+//                    for (MessageQueue mq : lockOKMQSet) {
+//                        //
+//                        ProcessQueue processQueue = this.processQueueTable.get(mq);
+//                        if (processQueue != null) {
+//                            if (!processQueue.isLocked()) {
+//                                log.info("the message queue locked OK, Group: {} {}", this.consumerGroup, mq);
+//                            }
+//                            // 进行上锁， 如果已经上锁了，就只更新时间
+//                            processQueue.setLocked(true);
+//                            processQueue.setLastLockTimestamp(System.currentTimeMillis());
+//                        }
+//                    }
+//                    // 处理上锁是失败
+//                    for (MessageQueue mq : mqs) {
+//                        if (!lockOKMQSet.contains(mq)) {
+//                            ProcessQueue processQueue = this.processQueueTable.get(mq);
+//                            if (processQueue != null) {
+//                                processQueue.setLocked(false);
+//                                log.warn("the message queue locked Failed, Group: {} {}", this.consumerGroup, mq);
+//                            }
+//                        }
+//                    }
                 } catch (Exception e) {
                     log.error("lockBatchMQ exception, " + mqs, e);
                 }
@@ -279,6 +305,8 @@ public abstract class RebalanceImpl {
 
                     List<MessageQueue> allocateResult = null;
                     try {
+                        // 消费者，队列分配， cid -> clientId
+                        // todo 0823 计算出当前clientid，所分配的messagQueue队列id
                         allocateResult = strategy.allocate(
                             this.consumerGroup,
                             this.mQClientFactory.getClientId(),
@@ -296,6 +324,7 @@ public abstract class RebalanceImpl {
                     }
 
                     boolean changed = this.updateProcessQueueTableInRebalance(topic, allocateResultSet, isOrder);
+                    // 判断是否有更新
                     if (changed) {
                         log.info(
                             "rebalanced result changed. allocateMessageQueueStrategyName={}, group={}, topic={}, clientId={}, mqAllSize={}, cidAllSize={}, rebalanceResultSize={}, rebalanceResultSet={}",
@@ -377,18 +406,20 @@ public abstract class RebalanceImpl {
 
                 long nextOffset = -1L;
                 try {
+                    //todo 0823 从messageQueue中查找到最近的消费进度， 通过offsetTable存放了messageQueue与对应的消费位移。
                     nextOffset = this.computePullFromWhereWithException(mq);
                 } catch (Exception e) {
                     log.info("doRebalance, {}, compute offset failed, {}", consumerGroup, mq);
                     continue;
                 }
-
+               // processQueueTable 存放 消费队列 与 消费进度的对应关系
                 if (nextOffset >= 0) {
                     ProcessQueue pre = this.processQueueTable.putIfAbsent(mq, pq);
                     if (pre != null) {
                         log.info("doRebalance, {}, mq already exists, {}", consumerGroup, mq);
                     } else {
                         log.info("doRebalance, {}, add a new mq, {}", consumerGroup, mq);
+                        // todo 0823 不存在对应的拉取请求时，则构造一个 （pullRequest 作为中间连接角色： 消费，生产）
                         PullRequest pullRequest = new PullRequest();
                         pullRequest.setConsumerGroup(consumerGroup);
                         pullRequest.setNextOffset(nextOffset);
@@ -402,7 +433,7 @@ public abstract class RebalanceImpl {
                 }
             }
         }
-
+        // rebalance 重平衡服务构造了pr之后，就进行分发 写到pullRequestQueue中，可能是为了重复，于是只有pullReqesut重复
         this.dispatchPullRequest(pullRequestList);
 
         return changed;

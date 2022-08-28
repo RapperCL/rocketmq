@@ -112,7 +112,7 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor {
         return this.brokerController.getMessageStore().isOSPageCacheBusy() ||
             this.brokerController.getMessageStore().isTransientStorePoolDeficient();
     }
-
+    // 异步消费之后，发送消息回执
     private CompletableFuture<RemotingCommand> asyncConsumerSendMsgBack(ChannelHandlerContext ctx,
                                                                         RemotingCommand request) throws RemotingCommandException {
         final RemotingCommand response = RemotingCommand.createResponseCommand(null);
@@ -164,7 +164,7 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor {
             response.setCode(ResponseCode.NO_PERMISSION);
             response.setRemark(String.format("the topic[%s] sending message is forbidden", newTopic));
             return CompletableFuture.completedFuture(response);
-        }
+        }// 根据消息位移查找对应的消息
         MessageExt msgExt = this.brokerController.getMessageStore().lookMessageByOffset(requestHeader.getOffset());
         if (null == msgExt) {
             response.setCode(ResponseCode.SYSTEM_ERROR);
@@ -190,6 +190,7 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor {
         // 重复消费达到了最大消费次数
         if (msgExt.getReconsumeTimes() >= maxReconsumeTimes
             || delayLevel < 0) {
+            // 对于发送失败的消息会创建新的topic， %DLQ% + group
             newTopic = MixAll.getDLQTopic(requestHeader.getGroup());
             queueIdInt = ThreadLocalRandom.current().nextInt(99999999) % DLQ_NUMS_PER_GROUP;
 
@@ -203,7 +204,7 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor {
                 return CompletableFuture.completedFuture(response);
             }
             msgExt.setDelayTimeLevel(0);
-        } else {
+        } else {// todo delayLevel等级根据重试次数增加，并重新写入到消息中： 3 ，4 ，5
             if (0 == delayLevel) {
                 delayLevel = 3 + msgExt.getReconsumeTimes();
             }
@@ -313,6 +314,7 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor {
 
         CompletableFuture<PutMessageResult> putMessageResult = null;
         String transFlag = origProps.get(MessageConst.PROPERTY_TRANSACTION_PREPARED);
+        // todo 0816 如果是事务消息，则通过TransactionalMessageServ进行先转换再写入
         if (Boolean.parseBoolean(transFlag)) {
             if (this.brokerController.getBrokerConfig().isRejectTransactionMessage()) {
                 response.setCode(ResponseCode.NO_PERMISSION);

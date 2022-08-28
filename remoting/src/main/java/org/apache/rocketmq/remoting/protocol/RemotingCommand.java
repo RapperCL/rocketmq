@@ -113,7 +113,8 @@ public class RemotingCommand {
     public static RemotingCommand createResponseCommand(Class<? extends CommandCustomHeader> classHeader) {
         return createResponseCommand(RemotingSysResponseCode.SYSTEM_ERROR, "not set any response code", classHeader);
     }
-
+    //todo 0824 不同的远程存在不同的custoerHeader，于是将不同的抽象为接口，然后不同的实现类，传入对于的类，并通过反射创建
+    // 其实也可以直接传入对应的类 为什么要这样呢？
     public static RemotingCommand createResponseCommand(int code, String remark,
         Class<? extends CommandCustomHeader> classHeader) {
         RemotingCommand cmd = new RemotingCommand();

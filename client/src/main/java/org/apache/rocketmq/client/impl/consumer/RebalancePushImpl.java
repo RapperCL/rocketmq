@@ -179,7 +179,7 @@ public class RebalancePushImpl extends RebalanceImpl {
                     result = -1;
                 }
                 break;
-            }
+            }// todo 0823 第一次获取位移从broker端获取
             case CONSUME_FROM_FIRST_OFFSET: {
                 long lastOffset = offsetStore.readOffset(mq, ReadOffsetType.READ_FROM_STORE);
                 if (lastOffset >= 0) {
@@ -225,6 +225,7 @@ public class RebalancePushImpl extends RebalanceImpl {
 
         return result;
     }
+
 
     @Override
     public void dispatchPullRequest(List<PullRequest> pullRequestList) {

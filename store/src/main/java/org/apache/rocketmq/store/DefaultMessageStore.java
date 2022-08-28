@@ -1304,8 +1304,10 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     private boolean checkInDiskByCommitOffset(long offsetPy, long maxOffsetPy) {
+        // 默认24G * 40 /100  （AccessMessageRatio 即 40%）
         long memory = (long) (StoreUtil.TOTAL_PHYSICAL_MEMORY_SIZE * (this.messageStoreConfig.getAccessMessageInMemoryMaxRatio() / 100.0));
-        // 最大消息位移- 消息位移 > 最大可用内存时，那么就代表这个消息不会在内存中，而是在磁盘中了
+        // 最大消息位移- 消息位移 > 最大可用内存时，那么就代表这个消息不会在内存Page中，而是在磁盘中了，
+        // 此时读取时，大概率需要从磁盘中读取
         return (maxOffsetPy - offsetPy) > memory;
     }
    // 这里已经对消息做了控制，那么我们在从缓存中获取消息时，就应该对缓存进行指定获取，那么这里其实也不用做控制了
@@ -1319,7 +1321,9 @@ public class DefaultMessageStore implements MessageStore {
 //            return true;
 //        }
 
+        // 读取消息控制，通过消息在磁盘或内存中的最大字节数进行控制
         if (isInDisk) {
+            // 当前已经读取的缓存总量+ 当前位移消息的大小 > 消息在磁盘上的最大传输字节数
             if ((bufferTotal + sizePy) > this.messageStoreConfig.getMaxTransferBytesOnMessageInDisk()) {
                 return true;
             }

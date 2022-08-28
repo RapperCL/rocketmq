@@ -98,6 +98,7 @@ public class RebalanceLockManager {
     }
 
     private boolean isLocked(final String group, final MessageQueue mq, final String clientId) {
+        // 队列锁集合
         ConcurrentHashMap<MessageQueue, LockEntry> groupValue = this.mqLockTable.get(group);
         if (groupValue != null) {
             LockEntry lockEntry = groupValue.get(mq);
@@ -120,13 +121,14 @@ public class RebalanceLockManager {
         Set<MessageQueue> notLockedMqs = new HashSet<MessageQueue>(mqs.size());
 
         for (MessageQueue mq : mqs) {
+            // 判断此mq是否已经被 group下的clientid锁住了，如果已锁，则更新时间，
             if (this.isLocked(group, mq, clientId)) {
                 lockedMqs.add(mq);
             } else {
                 notLockedMqs.add(mq);
             }
         }
-
+        // 尝试对未加锁成功的队列进行二次加锁。 主要考虑了过期时间 60s
         if (!notLockedMqs.isEmpty()) {
             try {
                 this.lock.lockInterruptibly();
@@ -157,7 +159,7 @@ public class RebalanceLockManager {
                         }
 
                         String oldClientId = lockEntry.getClientId();
-
+                       // 默认过期时间为60s， 如果没有被当前的clientid锁住，但是过期了，那么则会重新上锁
                         if (lockEntry.isExpired()) {
                             lockEntry.setClientId(clientId);
                             lockEntry.setLastUpdateTimestamp(System.currentTimeMillis());

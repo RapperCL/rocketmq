@@ -18,6 +18,7 @@ package org.apache.rocketmq.client.impl.consumer;
 
 import org.apache.rocketmq.common.message.MessageQueue;
 
+// 消费拉取请求： 一个消费者组对应一个pullRequest ，包含逻辑队列和消费进度
 public class PullRequest {
     private String consumerGroup;
     private MessageQueue messageQueue;

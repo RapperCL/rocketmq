@@ -138,9 +138,9 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
             log.debug("Check topic={}, queues={}", topic, msgQueues);
             for (MessageQueue messageQueue : msgQueues) {
                 long startTime = System.currentTimeMillis();
-                // 操作队列？
+                // 根据messageQueue获取操作队列
                 MessageQueue opQueue = getOpQueue(messageQueue);
-                // 获取half消息队列的 offset
+                // 获取half消息队列的 offset 以及 op消息队列的offset
                 long halfOffset = transactionalMessageBridge.fetchConsumeOffset(messageQueue);
                 long opOffset = transactionalMessageBridge.fetchConsumeOffset(opQueue);
                 log.info("Before check, the queue={} msgOffset={} opOffset={}", messageQueue, halfOffset, opOffset);
@@ -174,7 +174,7 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
                         Long removedOpOffset = removeMap.remove(i);
                         doneOpOffset.add(removedOpOffset);
                     } else {
-                        // todo 0813 获取所有的half消息， 有点不理解，为什么已经获取了所有的消息，最终却只获取第一条消息进行检测？
+                        // todo 0813   有点不理解， 为什么只获取第一条消息进行检测？
                         GetResult getResult = getHalfMsg(messageQueue, i);
                         log.info("cyCal check halfMsg getResult:{}", JSONObject.toJSONString(getResult));
                         // 这里的msgEx仅仅是list.get(0)
@@ -273,7 +273,7 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
         }
 
     }
-
+   // 获取免疫时间
     private long getImmunityTime(String checkImmunityTimeStr, long transactionTimeout) {
         long checkImmunityTime;
 
@@ -298,7 +298,7 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
      */
     private PullResult fillOpRemoveMap(HashMap<Long, Long> removeMap,
         MessageQueue opQueue, long pullOffsetOfOp, long miniOffset, List<Long> doneOpOffset) {
-        // 获取移除的消息
+        // todo 0817 获取移除的消息 默认获取32条，此时的队列是 ...OP_HALF_TOPIC, 专门存放需要被删除的事务消息
         PullResult pullResult = pullOpMsg(opQueue, pullOffsetOfOp, 32);
         if (null == pullResult) {
             return null;
@@ -309,6 +309,7 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
                 pullResult);
             // 更新消费位移 那应该就是 在获取tran消息时，同时获取已删除的消息，然后
             // 对整体的消息进行过滤
+            // 遇到了 非法或未匹配到消息，更新offsetTable位移 topic@ququid， offset
             transactionalMessageBridge.updateConsumeOffset(opQueue, pullResult.getNextBeginOffset());
             return pullResult;
         } else if (pullResult.getPullStatus() == PullStatus.NO_NEW_MSG) {
@@ -321,15 +322,17 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
             log.warn("The miss op offset={} in queue={} is empty, pullResult={}", pullOffsetOfOp, opQueue, pullResult);
             return pullResult;
         }
+        // 这里才是 遍历获取到的op消息
         for (MessageExt opMessageExt : opMsg) {
             Long queueOffset = getLong(new String(opMessageExt.getBody(), TransactionalMessageUtil.charset));
             log.debug("Topic: {} tags: {}, OpOffset: {}, HalfOffset: {}", opMessageExt.getTopic(),
                 opMessageExt.getTags(), opMessageExt.getQueueOffset(), queueOffset);
-            // 记录被删除的位移
+            //  过滤被删除的事务消息，从而更新removeMap，以及完成了check的位移，理论上来说，这里应该都是remove消息
             if (TransactionalMessageUtil.REMOVETAG.equals(opMessageExt.getTags())) {
                 if (queueOffset < miniOffset) {
                     doneOpOffset.add(opMessageExt.getQueueOffset());
                 } else {
+                    // 更新 halfOffset， opOffset
                     removeMap.put(queueOffset, opMessageExt.getQueueOffset());
                 }
             } else {

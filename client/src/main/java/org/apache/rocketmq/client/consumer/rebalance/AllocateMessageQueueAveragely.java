@@ -34,14 +34,22 @@ public class AllocateMessageQueueAveragely extends AbstractAllocateMessageQueueS
             return result;
         }
 
+        // 当前clientid 在集合中的位置
         int index = cidAll.indexOf(currentCID);
         int mod = mqAll.size() % cidAll.size();
+        // 平均分配的个数：  可以整除则 mqSize/ cidSize 否则就 maSize/ cidSize + 1  / 11个队列，3个消费者
+        // mod >0 index(1) < 2
+        // aveSize = 3 + 1 = 4
         int averageSize =
             mqAll.size() <= cidAll.size() ? 1 : (mod > 0 && index < mod ? mqAll.size() / cidAll.size()
                 + 1 : mqAll.size() / cidAll.size());
+        // 当前client 所分配到队列的 起始数：
+        // startIndex = 4
         int startIndex = (mod > 0 && index < mod) ? index * averageSize : index * averageSize + mod;
+        // 3  4 5 6 7   / 0123 4567 8910
         int range = Math.min(averageSize, mqAll.size() - startIndex);
         for (int i = 0; i < range; i++) {
+            // 4 5 只给当前consumer应该分配的messageQueue
             result.add(mqAll.get((startIndex + i) % mqAll.size()));
         }
         return result;

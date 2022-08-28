@@ -87,7 +87,7 @@ public class RemoteBrokerOffsetStore implements OffsetStore {
                     }
                 }
                 case READ_FROM_STORE: {
-                    try {
+                    try { // todo 0823 第一次从broker端获取数据，然后记录数据并保存下来
                         long brokerOffset = this.fetchConsumeOffsetFromBroker(mq);
                         AtomicLong offset = new AtomicLong(brokerOffset);
                         this.updateOffset(mq, offset.get(), false);
@@ -124,6 +124,7 @@ public class RemoteBrokerOffsetStore implements OffsetStore {
             if (offset != null) {
                 if (mqs.contains(mq)) {
                     try {
+                        // 更新broker端的消费者位移请求
                         this.updateConsumeOffsetToBroker(mq, offset.get());
                         log.info("[persistAll] Group: {} ClientId: {} updateConsumeOffsetToBroker {} {}",
                             this.groupName,
@@ -134,6 +135,7 @@ public class RemoteBrokerOffsetStore implements OffsetStore {
                         log.error("updateConsumeOffsetToBroker exception, " + mq.toString(), e);
                     }
                 } else {
+                    // 记录当前产生了消费位移，但是为分配给当前client端的mQ， （重平衡后，也不应该出现，因为这个是5s一次）
                     unusedMQ.add(mq);
                 }
             }
@@ -206,6 +208,7 @@ public class RemoteBrokerOffsetStore implements OffsetStore {
         }
 
         if (findBrokerResult != null) {
+            //todo 0828 为什么不通过建造者 获取其他方式优化一下呢？
             UpdateConsumerOffsetRequestHeader requestHeader = new UpdateConsumerOffsetRequestHeader();
             requestHeader.setTopic(mq.getTopic());
             requestHeader.setConsumerGroup(this.groupName);
@@ -213,6 +216,7 @@ public class RemoteBrokerOffsetStore implements OffsetStore {
             requestHeader.setCommitOffset(offset);
 
             if (isOneway) {
+                // 此时发起的请求命令是： UPDATE_CONSUMER_OFFSET 15
                 this.mQClientFactory.getMQClientAPIImpl().updateConsumerOffsetOneway(
                     findBrokerResult.getBrokerAddr(), requestHeader, 1000 * 5);
             } else {

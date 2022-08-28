@@ -47,12 +47,14 @@ public class ProcessQueue {
     private final static long PULL_MAX_IDLE_TIME = Long.parseLong(System.getProperty("rocketmq.client.pull.pullMaxIdleTime", "120000"));
     private final InternalLogger log = ClientLogger.getLog();
     private final ReadWriteLock treeMapLock = new ReentrantReadWriteLock();
+    // todo 0827 作为broker上  消息的 副本。 以offset作为key， 消息体作为value
     private final TreeMap<Long, MessageExt> msgTreeMap = new TreeMap<Long, MessageExt>();
     private final AtomicLong msgCount = new AtomicLong();
     private final AtomicLong msgSize = new AtomicLong();
     private final Lock consumeLock = new ReentrantLock();
     /**
      * A subset of msgTreeMap, will only be used when orderly consume
+     * 以offset作为key进行排序 二叉搜索树
      */
     private final TreeMap<Long, MessageExt> consumingMsgOrderlyTreeMap = new TreeMap<Long, MessageExt>();
     private final AtomicLong tryUnlockTimes = new AtomicLong(0);
@@ -140,10 +142,12 @@ public class ProcessQueue {
                     MessageExt old = msgTreeMap.put(msg.getQueueOffset(), msg);
                     if (null == old) {
                         validMsgCnt++;
+                        //todo 0828  这里不应该比较一下？
                         this.queueOffsetMax = msg.getQueueOffset();
                         msgSize.addAndGet(msg.getBody().length);
                     }
                 }
+                // 记录拉取消息的大小
                 msgCount.addAndGet(validMsgCnt);
 
                 if (!msgTreeMap.isEmpty() && !this.consuming) {
@@ -198,6 +202,7 @@ public class ProcessQueue {
                 if (!msgTreeMap.isEmpty()) {
                     result = this.queueOffsetMax + 1;
                     int removedCnt = 0;
+                    // 将以消费的进行移除
                     for (MessageExt msg : msgs) {
                         MessageExt prev = msgTreeMap.remove(msg.getQueueOffset());
                         if (prev != null) {
@@ -206,7 +211,8 @@ public class ProcessQueue {
                         }
                     }
                     msgCount.addAndGet(removedCnt);
-
+                    //todo 0828  存在未消费完的话，则将offset置为当前未消费最小的位移，防止消息丢失。（更新了位移为最大的，结果并没有消费完，导致
+                    // 后续拉取消息时，也不会拉取了， 正常来说，这次未消费的，下次应该会继续拉取。
                     if (!msgTreeMap.isEmpty()) {
                         result = msgTreeMap.firstKey();
                     }
@@ -267,11 +273,14 @@ public class ProcessQueue {
         try {
             this.treeMapLock.writeLock().lockInterruptibly();
             try {
+                //todo 0828 获取当前本地已提交的最大提交偏移量  msgTreeMap -> cmot  由于是保证了有序的消费，所以其实也没有关系
                 Long offset = this.consumingMsgOrderlyTreeMap.lastKey();
+                // 本地msgCount和size更新
                 msgCount.addAndGet(0 - this.consumingMsgOrderlyTreeMap.size());
                 for (MessageExt msg : this.consumingMsgOrderlyTreeMap.values()) {
                     msgSize.addAndGet(0 - msg.getBody().length);
                 }
+                // 提交之后，进行清理
                 this.consumingMsgOrderlyTreeMap.clear();
                 if (offset != null) {
                     return offset + 1;
@@ -285,6 +294,8 @@ public class ProcessQueue {
 
         return -1;
     }
+
+    // 将消息从orderlyTreeMap转移到msTreeMap 的作用？ msgTreeMap每次消费时，都会取出，应该就是直接remove？
 
     public void makeMessageToConsumeAgain(List<MessageExt> msgs) {
         try {

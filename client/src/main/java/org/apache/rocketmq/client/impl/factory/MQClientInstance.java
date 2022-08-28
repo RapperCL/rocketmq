@@ -93,6 +93,7 @@ public class MQClientInstance {
     private final String clientId;
     private final long bootTimestamp = System.currentTimeMillis();
     private final ConcurrentMap<String/* group */, MQProducerInner> producerTable = new ConcurrentHashMap<String, MQProducerInner>();
+   // todo 0822 利用map存放所有消费者，生产者，key= group，那就代表消费者组，生产者组不能重复， 每个组，对应一个内部消费者，因为一个实例只会对应一个组内的分区mq
     private final ConcurrentMap<String/* group */, MQConsumerInner> consumerTable = new ConcurrentHashMap<String, MQConsumerInner>();
     private final ConcurrentMap<String/* group */, MQAdminExtInner> adminExtTable = new ConcurrentHashMap<String, MQAdminExtInner>();
     private final NettyClientConfig nettyClientConfig;
@@ -293,6 +294,7 @@ public class MQClientInstance {
             }
         }, 1000, this.clientConfig.getHeartbeatBrokerInterval(), TimeUnit.MILLISECONDS);
 
+        // 消息位移的提交 也是通过定时任务去完成的 定时5s 将消息位移更新和上报， 上报取得就是offsetTable
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -481,6 +483,7 @@ public class MQClientInstance {
     }
 
     private void persistAllConsumerOffset() {
+        // 遍历消费者集合，然后持久化消费位移
         Iterator<Entry<String, MQConsumerInner>> it = this.consumerTable.entrySet().iterator();
         while (it.hasNext()) {
             Entry<String, MQConsumerInner> entry = it.next();
@@ -952,6 +955,7 @@ public class MQClientInstance {
     }
 
     public void doRebalance() {
+        // 遍历消费者表， 消费拉取请求是 针对每个消费者组会构建一个pullRequest 拉取请求，这个pr请求将会一直循环使用
         for (Map.Entry<String, MQConsumerInner> entry : this.consumerTable.entrySet()) {
             MQConsumerInner impl = entry.getValue();
             if (impl != null) {
@@ -989,7 +993,7 @@ public class MQClientInstance {
         String brokerAddr = null;
         boolean slave = false;
         boolean found = false;
-
+        // brokerName集群名称，多个broker实例，即brokerid，
         HashMap<Long/* brokerId */, String/* address */> map = this.brokerAddrTable.get(brokerName);
         if (map != null && !map.isEmpty()) {
             brokerAddr = map.get(brokerId);
@@ -1026,6 +1030,7 @@ public class MQClientInstance {
         return 0;
     }
 
+    // 获取消费者id
     public List<String> findConsumerIdList(final String topic, final String group) {
         String brokerAddr = this.findBrokerAddrByTopic(topic);
         if (null == brokerAddr) {

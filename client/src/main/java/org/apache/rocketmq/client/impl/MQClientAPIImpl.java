@@ -556,6 +556,7 @@ public class MQClientAPIImpl {
                         } catch (Throwable e) {
                         }
 
+                        // 根据服务端的处理时间，以brokerName作为key
                         producer.updateFaultItem(brokerName, System.currentTimeMillis() - responseFuture.getBeginTimestamp(), false);
                         return;
                     }
