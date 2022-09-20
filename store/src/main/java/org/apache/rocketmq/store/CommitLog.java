@@ -918,10 +918,11 @@ public class CommitLog {
      */
     public long pickupStoreTimestamp(final long offset, final int size) {
         if (offset >= this.getMinOffset()) {
+            // 从指定的位置读取指定大小的数据。
             SelectMappedBufferResult result = this.getMessage(offset, size);
             if (null != result) {
                 try {
-                    int sysFlag = result.getByteBuffer().getInt(MessageDecoder.SYSFLAG_POSITION);
+                 taer   int sysFlag = result.getByteBuffer().getInt(MessageDecoder.SYSFLAG_POSITION);
                     int bornhostLength = (sysFlag & MessageSysFlag.BORNHOST_V6_FLAG) == 0 ? 8 : 20;
                     int msgStoreTimePos = 4 + 4 + 4 + 4 + 4 + 8 + 8 + 4 + 8 + bornhostLength;
                     return result.getByteBuffer().getLong(msgStoreTimePos);

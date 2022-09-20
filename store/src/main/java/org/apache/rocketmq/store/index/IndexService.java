@@ -215,6 +215,7 @@ public class IndexService {
                 case MessageSysFlag.TRANSACTION_PREPARED_TYPE:
                 case MessageSysFlag.TRANSACTION_COMMIT_TYPE:
                     break;
+                    // todo 0919 对于回滚的消息不会记录
                 case MessageSysFlag.TRANSACTION_ROLLBACK_TYPE:
                     return;
             }

@@ -157,7 +157,7 @@ public class ConsumeQueue {
     }
     // 通过时间戳进行查询？
     public long getOffsetInQueueByTime(final long timestamp) {
-        // 根据时间戳 比较最近的修改时间 来查询mappedFile
+        // 根据时间戳 由远及近 进行查询mappedFile
         MappedFile mappedFile = this.mappedFileQueue.getMappedFileByTime(timestamp);
         if (mappedFile != null) {
             long offset = 0;
@@ -177,16 +177,16 @@ public class ConsumeQueue {
                         midOffset = (low + high) / (2 * CQ_STORE_UNIT_SIZE) * CQ_STORE_UNIT_SIZE;
                         // 从当前位置获取物理偏移量和消息大小
                         byteBuffer.position(midOffset);
-                        // 中间物理位移
+                        // 中间物理位移-- 从当前位置往下读取8位。long类型的数据
                         long phyOffset = byteBuffer.getLong();
-                        int size = byteBuffer.getInt();
+                        int size = byteBuffer.getInt();// 从当前位置往下读取大小=4 的数据
                         // 中间位移 < 当前页的最小位移  调整边界：
                         if (phyOffset < minPhysicOffset) {
                             low = midOffset + CQ_STORE_UNIT_SIZE;
                             leftOffset = midOffset;
                             continue;
                         }
-                        // 获取中间位移对应的消息存储时间
+                        // 获取中间位移对应的消息存储时间, 这里并非是从cq中获取时间，而是根据物理位移去CommitLog中获取对应的时间。
                         long storeTime =
                             this.defaultMessageStore.getCommitLog().pickupStoreTimestamp(phyOffset, size);
                         if (storeTime < 0) {
@@ -221,6 +221,9 @@ public class ConsumeQueue {
 
                             offset = leftOffset;
                         } else {
+                            // 走到这里，代表timestamp在 l和r的范围外，那么我们就找一个离目标最近的。
+                            // t l r -> l
+                            // l r t -> r
                             offset =
                                 Math.abs(timestamp - leftIndexValue) > Math.abs(timestamp
                                     - rightIndexValue) ? rightOffset : leftOffset;
@@ -491,7 +494,7 @@ public class ConsumeQueue {
     // 写入消息 phyOffset， size， tagsCode cqOffset干嘛的
     private boolean putMessagePositionInfo(final long offset, final int size, final long tagsCode,
         final long cqOffset) {
-
+        // maxPhysicOffset 代表当前已经4写入到mapperFile中的位移。 若小于=最大位移，代表是重复了。
         if (offset + size <= this.maxPhysicOffset) {
             log.warn("Maybe try to build consume queue repeatedly maxPhysicOffset={} phyOffset={}", maxPhysicOffset, offset);
             return true;

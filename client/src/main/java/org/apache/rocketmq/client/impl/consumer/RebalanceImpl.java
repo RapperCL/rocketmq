@@ -64,6 +64,7 @@ public abstract class RebalanceImpl {
         this.mQClientFactory = mQClientFactory;
     }
 
+    // todo 0831 应该是对于 有序消息才需要进行解锁吧
     public void unlock(final MessageQueue mq, final boolean oneway) {
         FindBrokerResult findBrokerResult = this.mQClientFactory.findBrokerAddressInSubscribe(mq.getBrokerName(), MixAll.MASTER_ID, true);
         if (findBrokerResult != null) {
@@ -366,6 +367,7 @@ public abstract class RebalanceImpl {
             ProcessQueue pq = next.getValue();
 
             if (mq.getTopic().equals(topic)) {
+                // rebalance时，将那些已经分配出去的mq进行移除
                 if (!mqSet.contains(mq)) {
                     pq.setDropped(true);
                     if (this.removeUnnecessaryMessageQueue(mq, pq)) {
@@ -394,13 +396,16 @@ public abstract class RebalanceImpl {
         }
 
         List<PullRequest> pullRequestList = new ArrayList<PullRequest>();
+        //todo 0831 处理那些新分配到的msg， 对那些进行加锁， 也仅仅是 有序消息时，才会进行加锁
+        // 此时如果对应的队列有消息时，会为其分配对应的 pullRequest请求，
+        // 那会不会存在： 分配时，此时没有消息产生呢？ 那岂不是不会分配pr请求， 哦，看了过滤 >= 0
         for (MessageQueue mq : mqSet) {
             if (!this.processQueueTable.containsKey(mq)) {
                 if (isOrder && !this.lock(mq)) {
                     log.warn("doRebalance, {}, add a new mq failed, {}, because lock failed", consumerGroup, mq);
                     continue;
                 }
-
+                // 移除之前可能存在的 旧位移
                 this.removeDirtyOffset(mq);
                 ProcessQueue pq = new ProcessQueue();
 
@@ -412,7 +417,7 @@ public abstract class RebalanceImpl {
                     log.info("doRebalance, {}, compute offset failed, {}", consumerGroup, mq);
                     continue;
                 }
-               // processQueueTable 存放 消费队列 与 消费进度的对应关系
+               // todo 0823 processQueueTable 存放 消费队列 与 消费进度的对应关系
                 if (nextOffset >= 0) {
                     ProcessQueue pre = this.processQueueTable.putIfAbsent(mq, pq);
                     if (pre != null) {
@@ -433,7 +438,7 @@ public abstract class RebalanceImpl {
                 }
             }
         }
-        // rebalance 重平衡服务构造了pr之后，就进行分发 写到pullRequestQueue中，可能是为了重复，于是只有pullReqesut重复
+        // rebalance 重平衡服务构造了pr之后，就进行分发 写到pullRequestQueue中
         this.dispatchPullRequest(pullRequestList);
 
         return changed;

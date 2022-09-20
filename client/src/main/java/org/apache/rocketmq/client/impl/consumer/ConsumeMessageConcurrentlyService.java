@@ -283,7 +283,7 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
                 // 要知道这里是消费失败后的处理，消费成功之后，不会走到这里，而是仅更新offsetTable
                 for (int i = ackIndex + 1; i < consumeRequest.getMsgs().size(); i++) {
                     MessageExt msg = consumeRequest.getMsgs().get(i);
-                    // 给每个消息发送broker回执
+                    // todo 0828 这里是消息消费失败的情况下，broker会将这批消息重新写到DLQ队列中，根据重试次数选择重试级别，重新进行消费。
                     boolean result = this.sendMessageBack(msg, context);
                     if (!result) {
                         msg.setReconsumeTimes(msg.getReconsumeTimes() + 1);
@@ -300,9 +300,10 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
             default:
                 break;
         }
-        // 对于消费失败的
+        // 对于未完全消费完的情况下（1 消费中异步，2 消费过程比较慢，又拉取了新消息？这个不会，这是在消费之后，才会提交二次拉取请求），这里会选择提交最小未完成消费的位移，否则就会选择最大的位移
         long offset = consumeRequest.getProcessQueue().removeMessage(consumeRequest.getMsgs());
         if (offset >= 0 && !consumeRequest.getProcessQueue().isDropped()) {
+            // 更新对应的位移 offsetTable
             this.defaultMQPushConsumerImpl.getOffsetStore().updateOffset(consumeRequest.getMessageQueue(), offset, true);
         }
     }

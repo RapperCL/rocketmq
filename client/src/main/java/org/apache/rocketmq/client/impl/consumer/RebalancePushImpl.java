@@ -81,6 +81,13 @@ public class RebalancePushImpl extends RebalanceImpl {
         this.getmQClientFactory().sendHeartbeatToAllBrokerWithLock();
     }
 
+    /**
+     * todo 0831 将当前mq的offset提交，然后在位移table中移除
+     * 过20s之后，发送broker端解锁。
+     * @param mq
+     * @param pq
+     * @return
+     */
     @Override
     public boolean removeUnnecessaryMessageQueue(MessageQueue mq, ProcessQueue pq) {
         this.defaultMQPushConsumerImpl.getOffsetStore().persist(mq);
@@ -90,6 +97,7 @@ public class RebalancePushImpl extends RebalanceImpl {
             try {
                 if (pq.getConsumeLock().tryLock(1000, TimeUnit.MILLISECONDS)) {
                     try {
+                        // 对于那些需要移除的20s 之后进行解锁
                         return this.unlockDelay(mq, pq);
                     } finally {
                         pq.getConsumeLock().unlock();
@@ -158,6 +166,7 @@ public class RebalancePushImpl extends RebalanceImpl {
             case CONSUME_FROM_LAST_OFFSET_AND_FROM_MIN_WHEN_BOOT_FIRST:
             case CONSUME_FROM_MIN_OFFSET:
             case CONSUME_FROM_MAX_OFFSET:
+                // 就近消费
             case CONSUME_FROM_LAST_OFFSET: {
                 long lastOffset = offsetStore.readOffset(mq, ReadOffsetType.READ_FROM_STORE);
                 if (lastOffset >= 0) {
@@ -179,7 +188,7 @@ public class RebalancePushImpl extends RebalanceImpl {
                     result = -1;
                 }
                 break;
-            }// todo 0823 第一次获取位移从broker端获取
+            }// todo 0823 从最开始的地方进行消费
             case CONSUME_FROM_FIRST_OFFSET: {
                 long lastOffset = offsetStore.readOffset(mq, ReadOffsetType.READ_FROM_STORE);
                 if (lastOffset >= 0) {

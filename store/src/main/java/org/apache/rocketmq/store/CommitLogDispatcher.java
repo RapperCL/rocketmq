@@ -19,6 +19,7 @@ package org.apache.rocketmq.store;
 
 /**
  * Dispatcher of commit log.
+ * todo 可以封装到commitLog内部
  */
 public interface CommitLogDispatcher {
 

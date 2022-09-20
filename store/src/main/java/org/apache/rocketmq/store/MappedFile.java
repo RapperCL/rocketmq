@@ -173,7 +173,7 @@ public class MappedFile extends ReferenceResource {
         try {
             // 通过RandomAeecessFile 设置filechannel
             this.fileChannel = new RandomAccessFile(this.file, "rw").getChannel();
-            // 使用map内存映射，将文件映射到内存 map
+            // 使用map内存映射，将内核缓冲区的文件数据映射到用户内存 map
             this.mappedByteBuffer = this.fileChannel.map(MapMode.READ_WRITE, 0, fileSize);
             // 总的虚拟内存使用
             TOTAL_MAPPED_VIRTUAL_MEMORY.addAndGet(fileSize);
