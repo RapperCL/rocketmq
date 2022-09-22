@@ -99,8 +99,9 @@ public class ConsumeMessageOrderlyService implements ConsumeMessageService {
                 public void run() {
                     try {
                         // todo 0825 定时加锁续期， broker对于加锁过期时间为60s，
-                        // 客户端延迟10s开始加锁，接下来间隔20s，进行续命或更新， 从prcessQueueTable遍历当前clientid对应的mesageQueue
-                        // 按理来说，也只应该加 使用了orderService的消费者， 应不应该给topic也附加上这个呢？ 显然是不应该的
+                        // 客户端延迟1s开始加锁，接下来间隔20s，进行续命或更新， 从prcessQueueTable遍历当前clientid对应的mesageQueue
+                        // 按理来说，也只应该加 使用了orderService的消费者， 应不应该给topic也附加上这个呢？ 显然是不应该的，其实也可以不用做区分
+                        // 全部加也是可以的。因为只有顺序消息才会要求加锁。
                         // 于是会orderService会对该clientid 分配的所有的mq进行加锁，
                         ConsumeMessageOrderlyService.this.lockMQPeriodically();
                     } catch (Throwable e) {
@@ -459,7 +460,7 @@ public class ConsumeMessageOrderlyService implements ConsumeMessageService {
                             log.warn("the message queue not be able to consume, because it's dropped. {}", this.messageQueue);
                             break;
                         }
-                        // 按理来说不会走到这里
+                        // 按理来说不会走到这里,，初次不会，后续可能会？
                         if (MessageModel.CLUSTERING.equals(ConsumeMessageOrderlyService.this.defaultMQPushConsumerImpl.messageModel())
                             && !this.processQueue.isLocked()) {
                             log.warn("the message queue not locked, so consume later, {}", this.messageQueue);
