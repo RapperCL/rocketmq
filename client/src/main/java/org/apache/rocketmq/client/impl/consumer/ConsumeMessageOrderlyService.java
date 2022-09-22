@@ -372,10 +372,11 @@ public class ConsumeMessageOrderlyService implements ConsumeMessageService {
         boolean suspend = false;
         if (msgs != null && !msgs.isEmpty()) {
             for (MessageExt msg : msgs) {
-                // 重试次数 >= 最大重试次数时 默认最大的重试次数为16次
+                // 重试次数 >= 最大重试次数时 默认最大的重试次数为16次  超过最大重试次数则 将此消息发送到 重试队列
                 if (msg.getReconsumeTimes() >= getMaxReconsumeTimes()) {
                     MessageAccessor.setReconsumeTime(msg, String.valueOf(msg.getReconsumeTimes()));
-                    // 如果发送到重试主题失败，那么会再次尝试本地消费一次。  // 需不需要做个控制，如果一直发送失败，那么会导致本地的消息一直重试
+                     // 需不需要做个控制，如果一直发送失败，那么会导致本地的消息一直重试
+                    // suspend =true，如果写入broker失败，那么会再次尝试进行消费。
                     if (!sendMessageBack(msg)) {
                         suspend = true;
                         msg.setReconsumeTimes(msg.getReconsumeTimes() + 1);
@@ -489,6 +490,7 @@ public class ConsumeMessageOrderlyService implements ConsumeMessageService {
                         // 顺序消息最大的批量消费个数 = 1
                         // 从msgTreeMap中获取消息并进行消费
                         List<MessageExt> msgs = this.processQueue.takeMessages(consumeBatchSize);
+                        // 为什么需要重新设置重试主题和命名空间呢？
                         defaultMQPushConsumerImpl.resetRetryAndNamespace(msgs, defaultMQPushConsumer.getConsumerGroup());
                         if (!msgs.isEmpty()) {
                             final ConsumeOrderlyContext context = new ConsumeOrderlyContext(this.messageQueue);
