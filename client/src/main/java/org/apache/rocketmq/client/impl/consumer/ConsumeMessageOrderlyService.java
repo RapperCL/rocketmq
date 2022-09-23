@@ -518,6 +518,7 @@ public class ConsumeMessageOrderlyService implements ConsumeMessageService {
                             try {
                                 // 消费锁锁住 ，单个队列锁
                                 this.processQueue.getConsumeLock().lock();
+                                // 锁住之后，还有可能被移除吗？
                                 if (this.processQueue.isDropped()) {
                                     log.warn("consumeMessage, the message queue not be able to consume, because it's dropped. {}",
                                         this.messageQueue);

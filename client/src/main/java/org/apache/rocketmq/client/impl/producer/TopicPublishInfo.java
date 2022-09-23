@@ -83,10 +83,13 @@ public class TopicPublishInfo {
             return selectOneMessageQueue();
         }
     }
+
+
     // 单个节点或主从集群下，通过brokerName过滤之后，会走到这里。
     public MessageQueue selectOneMessageQueue() {
         int index = this.sendWhichQueue.incrementAndGet();
         int pos = Math.abs(index) % this.messageQueueList.size();
+        // 这里也不应该有这个判断
         if (pos < 0)
             pos = 0;
         return this.messageQueueList.get(pos);
