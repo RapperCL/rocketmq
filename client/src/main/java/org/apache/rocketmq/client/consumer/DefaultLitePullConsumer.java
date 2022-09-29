@@ -19,6 +19,8 @@ package org.apache.rocketmq.client.consumer;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
+
+import com.sun.xml.internal.ws.policy.privateutil.PolicyUtils;
 import org.apache.rocketmq.client.ClientConfig;
 import org.apache.rocketmq.client.consumer.rebalance.AllocateMessageQueueAveragely;
 import org.apache.rocketmq.client.consumer.store.OffsetStore;
@@ -28,6 +30,7 @@ import org.apache.rocketmq.client.log.ClientLogger;
 import org.apache.rocketmq.client.trace.AsyncTraceDispatcher;
 import org.apache.rocketmq.client.trace.TraceDispatcher;
 import org.apache.rocketmq.client.trace.hook.ConsumeMessageTraceHookImpl;
+import org.apache.rocketmq.client.utils.ServiceProvider;
 import org.apache.rocketmq.common.MixAll;
 import org.apache.rocketmq.common.UtilAll;
 import org.apache.rocketmq.common.consumer.ConsumeFromWhere;
@@ -86,7 +89,7 @@ public class DefaultLitePullConsumer extends ClientConfig implements LitePullCon
     /**
      * Queue allocation algorithm
      */
-    private AllocateMessageQueueStrategy allocateMessageQueueStrategy = new AllocateMessageQueueAveragely();
+    private AllocateMessageQueueStrategy allocateMessageQueueStrategy;
     /**
      * Whether the unit of subscription group
      */
@@ -222,7 +225,9 @@ public class DefaultLitePullConsumer extends ClientConfig implements LitePullCon
         this.consumerGroup = consumerGroup;
         this.enableStreamRequestType = true;
         defaultLitePullConsumerImpl = new DefaultLitePullConsumerImpl(this, rpcHook);
+        allocateMessageQueueStrategy = ServiceProvider.loadClass(ServiceProvider.SericeLoadId.MSG_QUEUE_STRATEG_ID, AllocateMessageQueueStrategy.class);
     }
+
 
     @Override
     public void start() throws MQClientException {

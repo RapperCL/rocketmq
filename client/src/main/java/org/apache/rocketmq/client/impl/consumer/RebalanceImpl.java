@@ -128,7 +128,6 @@ public abstract class RebalanceImpl {
                 mqs = new HashSet<MessageQueue>();
                 result.put(mq.getBrokerName(), mqs);
             }
-
             mqs.add(mq);
         }
 
@@ -266,6 +265,7 @@ public abstract class RebalanceImpl {
     private void rebalanceByTopic(final String topic, final boolean isOrder) {
         switch (messageModel) {
             case BROADCASTING: {
+                // todo 0929 当前client 是否消费了 发生重平衡的主题队列， isOrder？ 难道srv知道 主题是否是有序的？
                 Set<MessageQueue> mqSet = this.topicSubscribeInfoTable.get(topic);
                 if (mqSet != null) {
                     boolean changed = this.updateProcessQueueTableInRebalance(topic, mqSet, isOrder);
@@ -405,7 +405,7 @@ public abstract class RebalanceImpl {
                     log.warn("doRebalance, {}, add a new mq failed, {}, because lock failed", consumerGroup, mq);
                     continue;
                 }
-                // 移除之前可能存在的 旧位移
+                // 移除之前可能存在的 旧位移 会存在吗？ 难道之前移除不属于自己的topic时，没有直接清理吗？
                 this.removeDirtyOffset(mq);
                 ProcessQueue pq = new ProcessQueue();
 
@@ -417,7 +417,8 @@ public abstract class RebalanceImpl {
                     log.info("doRebalance, {}, compute offset failed, {}", consumerGroup, mq);
                     continue;
                 }
-               // todo 0823 processQueueTable 存放 消费队列 与 消费进度的对应关系
+                // todo 0823 processQueueTable 存放 消费队列 与 消费进度的对应关系
+                // nextOffset = -1 时，那么就不会给其分配 pr了 什么情况下 ==-1 1 异常情况下
                 if (nextOffset >= 0) {
                     ProcessQueue pre = this.processQueueTable.putIfAbsent(mq, pq);
                     if (pre != null) {

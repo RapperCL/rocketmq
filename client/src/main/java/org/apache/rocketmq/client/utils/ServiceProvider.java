@@ -14,40 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.rocketmq.broker.util;
+package org.apache.rocketmq.client.utils;
 
-import java.nio.charset.StandardCharsets;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+
+import org.apache.rocketmq.client.log.ClientLogger;
+import org.apache.rocketmq.logging.InternalLogger;
+import org.apache.rocketmq.logging.inner.Logger;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 public class ServiceProvider {
 
-    private final static Logger LOG = LoggerFactory
-        .getLogger(ServiceProvider.class);
+    private final static InternalLogger log = ClientLogger.getLog();
     /**
      * A reference to the classloader that loaded this class. It's more efficient to compute it once and cache it here.
      */
     private static ClassLoader thisClassLoader;
 
-    /**
-     * JDK1.3+ <a href= "http://java.sun.com/j2se/1.3/docs/guide/jar/jar.html#Service%20Provider" > 'Service Provider' specification</a>.
-     */
-    public static final String TRANSACTION_SERVICE_ID = "META-INF/service/org.apache.rocketmq.broker.transaction.TransactionalMessageService";
-
-    public static final String TRANSACTION_LISTENER_ID = "META-INF/service/org.apache.rocketmq.broker.transaction.AbstractTransactionalMessageCheckListener";
-
-
-    public static final String RPC_HOOK_ID = "META-INF/service/org.apache.rocketmq.remoting.RPCHook";
-
-
-    public static final String ACL_VALIDATOR_ID = "META-INF/service/org.apache.rocketmq.acl.AccessValidator";
-
+    private final String MSG_QUEUE_STRATEG_ID = "META-INF/service/org.apache.rocketmq.client.consumer.AllocateMessageQueueStrategy";
 
 
     static {
@@ -74,8 +63,8 @@ public class ServiceProvider {
         try {
             return clazz.getClassLoader();
         } catch (SecurityException e) {
-            LOG.error("Unable to get classloader for class {} due to security restrictions , error info {}",
-                clazz, e.getMessage());
+            log.error("Unable to get classloader for class {} due to security restrictions , error info {}",
+                    clazz, e.getMessage());
             throw e;
         }
     }
@@ -103,7 +92,7 @@ public class ServiceProvider {
     }
 
     public static <T> List<T> load(String name, Class<?> clazz) {
-        LOG.info("Looking for a resource file of name [{}] ...", name);
+        log.info("Looking for a resource file of name [{}] ...", name);
         List<T> services = new ArrayList<T>();
         try {
             ArrayList<String> names = new ArrayList<String>();
@@ -113,24 +102,24 @@ public class ServiceProvider {
                 reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
                 String serviceName = reader.readLine();
                 while (serviceName != null && !"".equals(serviceName)) {
-                    LOG.info(
-                        "Creating an instance as specified by file {} which was present in the path of the context classloader.",
-                        name);
+                    log.info(
+                            "Creating an instance as specified by file {} which was present in the path of the context classloader.",
+                            name);
                     if (!names.contains(serviceName)) {
                         names.add(serviceName);
                     }
 
-                    services.add((T)initService(getContextClassLoader(), serviceName, clazz));
+                    services.add((T) initService(getContextClassLoader(), serviceName, clazz));
 
                     serviceName = reader.readLine();
                 }
                 reader.close();
             } else {
                 // is == null
-                LOG.warn("No resource file with name [{}] found.", name);
+                log.warn("No resource file with name [{}] found.", name);
             }
         } catch (Exception e) {
-            LOG.error("Error occured when looking for resource file " + name, e);
+            log.error("Error occured when looking for resource file " + name, e);
         }
         return services;
     }
@@ -147,11 +136,11 @@ public class ServiceProvider {
                 if (serviceName != null && !"".equals(serviceName)) {
                     return initService(getContextClassLoader(), serviceName, clazz);
                 } else {
-                    LOG.warn("ServiceName is empty!");
+                    log.warn("ServiceName is empty!");
                     return null;
                 }
             } catch (Exception e) {
-                LOG.warn("Error occurred when looking for resource file " + name, e);
+                log.warn("Error occurred when looking for resource file " + name, e);
             }
         }
         return null;
@@ -165,38 +154,43 @@ public class ServiceProvider {
                     // Warning: must typecast here & allow exception to be generated/caught & recast properly
                     serviceClazz = classLoader.loadClass(serviceName);
                     if (clazz.isAssignableFrom(serviceClazz)) {
-                        LOG.info("Loaded class {} from classloader {}", serviceClazz.getName(),
-                            objectId(classLoader));
+                        log.info("Loaded class {} from classloader {}", serviceClazz.getName(),
+                                objectId(classLoader));
                     } else {
                         // This indicates a problem with the ClassLoader tree. An incompatible ClassLoader was used to load the implementation.
-                        LOG.error(
-                            "Class {} loaded from classloader {} does not extend {} as loaded by this classloader.",
-                            serviceClazz.getName(),
-                            objectId(serviceClazz.getClassLoader()), clazz.getName());
+                        log.error(
+                                "Class {} loaded from classloader {} does not extend {} as loaded by this classloader.",
+                                serviceClazz.getName(),
+                                objectId(serviceClazz.getClassLoader()), clazz.getName());
                     }
-                    return (T)serviceClazz.getDeclaredConstructor().newInstance();
+                    return (T) serviceClazz.getDeclaredConstructor().newInstance();
                 } catch (ClassNotFoundException ex) {
                     if (classLoader == thisClassLoader) {
                         // Nothing more to try, onwards.
-                        LOG.warn("Unable to locate any class {} via classloader {}", serviceName,
-                            objectId(classLoader));
+                        log.warn("Unable to locate any class {} via classloader {}", serviceName,
+                                objectId(classLoader));
                         throw ex;
                     }
                     // Ignore exception, continue
                 } catch (NoClassDefFoundError e) {
                     if (classLoader == thisClassLoader) {
                         // Nothing more to try, onwards.
-                        LOG.warn(
-                            "Class {} cannot be loaded via classloader {}.it depends on some other class that cannot be found.",
-                            serviceClazz, objectId(classLoader));
+                        log.warn(
+                                "Class {} cannot be loaded via classloader {}.it depends on some other class that cannot be found.",
+                                serviceClazz, objectId(classLoader));
                         throw e;
                     }
                     // Ignore exception, continue
                 }
             }
         } catch (Exception e) {
-            LOG.error("Unable to init service.", e);
+            log.error("Unable to init service.", e);
         }
-        return (T)serviceClazz;
+        return (T) serviceClazz;
+    }
+
+    public final static class SericeLoadId {
+        public final static String MSG_QUEUE_STRATEG_ID = "META-INF/service/org.apache.rocketmq.client.consumer.AllocateMessageQueueStrategy";
+
     }
 }
