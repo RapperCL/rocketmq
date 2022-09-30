@@ -108,19 +108,19 @@ public class ServiceProvider {
         LOG.info("Looking for a resource file of name [{}] ...", name);
         List<T> services = new ArrayList<>();
         try {
-            List<String> names = new ArrayList<>();
             final InputStream is = getResourceAsStream(getContextClassLoader(), name);
             if (is != null) {
                 BufferedReader reader;
                 reader = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8));
                 String serviceName = reader.readLine();
+                List<String> names = new ArrayList<>();
                 while (serviceName != null && !"".equals(serviceName)) {
                     LOG.info(
                             "Creating an instance as specified by file {} which was present in the path of the context classloader.",
                             name);
                     if (!names.contains(serviceName)) {
-                        services.add((T) initService(getContextClassLoader(), serviceName, clazz));
                         names.add(serviceName);
+                        services.add((T) initService(getContextClassLoader(), serviceName, clazz));
                     }
                     serviceName = reader.readLine();
                 }
