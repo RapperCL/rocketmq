@@ -1,0 +1,3 @@
+org.apache.rocketmq.proxy.grpc.interceptor.GlobalExceptionInterceptor
+org.apache.rocketmq.proxy.grpc.interceptor.ContextInterceptor
+org.apache.rocketmq.proxy.grpc.interceptor.HeaderInterceptor

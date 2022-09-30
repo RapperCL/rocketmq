@@ -17,6 +17,7 @@
 
 package org.apache.rocketmq.proxy;
 
+import ch.qos.logback.core.util.TimeUtil;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 
@@ -30,13 +31,21 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.UUID;
 import java.util.Iterator;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.TimeUnit;
+
+import io.grpc.protobuf.services.ChannelzService;
+import io.grpc.protobuf.services.ProtoReflectionService;
 import org.apache.rocketmq.broker.BrokerController;
 import org.apache.rocketmq.broker.BrokerStartup;
+import org.apache.rocketmq.broker.latency.BrokerFixedThreadPoolExecutor;
 import org.apache.rocketmq.client.log.ClientLogger;
 import org.apache.rocketmq.common.MixAll;
 import org.apache.rocketmq.proxy.config.Configuration;
 import org.apache.rocketmq.proxy.config.ConfigurationManager;
 import org.apache.rocketmq.proxy.config.ProxyConfig;
+import org.apache.rocketmq.proxy.grpc.GrpcServer;
+import org.apache.rocketmq.proxy.grpc.GrpcServerBuilder;
 import org.apache.rocketmq.proxy.processor.DefaultMessagingProcessor;
 import org.junit.After;
 import org.junit.Assert;
@@ -57,6 +66,12 @@ import static org.mockito.Mockito.mockStatic;
 public class ProxyStartupTest {
 
     private File proxyHome;
+
+    public static void main(String[] args) {
+        GrpcServer grpcServer = GrpcServerBuilder.newBuilder(new BrokerFixedThreadPoolExecutor(4, 4, 10L, TimeUnit.SECONDS, new ArrayBlockingQueue<>(100)), 8878)
+                .configInterceptor()
+                .build();
+    }
 
     @Before
     public void before() throws Throwable {

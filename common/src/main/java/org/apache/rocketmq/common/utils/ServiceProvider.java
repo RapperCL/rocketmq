@@ -50,6 +50,8 @@ public class ServiceProvider {
 
     public static final String ACL_VALIDATOR_ID = "META-INF/service/org.apache.rocketmq.acl.AccessValidator";
 
+    public static final String GRPC_INTERCEPTOR_ID = "META-INF/service/io.grpc.ServerInterceptor";
+
     static {
         thisClassLoader = getClassLoader(ServiceProvider.class);
     }

@@ -144,16 +144,14 @@ public class GrpcServerBuilder {
 
     public GrpcServerBuilder configInterceptor() {
         // grpc interceptors, including acl, logging etc.
+        List<ServerInterceptor> interceptors = ServiceProvider.load(ServiceProvider.GRPC_INTERCEPTOR_ID, ServerInterceptor.class);
         List<AccessValidator> accessValidators = ServiceProvider.load(ServiceProvider.ACL_VALIDATOR_ID, AccessValidator.class);
         if (!accessValidators.isEmpty()) {
             this.serverBuilder.intercept(new AuthenticationInterceptor(accessValidators));
         }
-
-        this.serverBuilder
-            .intercept(new GlobalExceptionInterceptor())
-            .intercept(new ContextInterceptor())
-            .intercept(new HeaderInterceptor());
-
+        for (ServerInterceptor item : interceptors) {
+            this.serverBuilder.intercept(item);
+        }
         return this;
     }
 }
