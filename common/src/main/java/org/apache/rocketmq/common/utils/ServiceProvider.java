@@ -18,6 +18,7 @@
 package org.apache.rocketmq.common.utils;
 
 import java.nio.charset.StandardCharsets;
+
 import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
@@ -76,7 +77,7 @@ public class ServiceProvider {
             return clazz.getClassLoader();
         } catch (SecurityException e) {
             LOG.error("Unable to get classloader for class {} due to security restrictions , error info {}",
-                clazz, e.getMessage());
+                    clazz, e.getMessage());
             throw e;
         }
     }
@@ -105,9 +106,9 @@ public class ServiceProvider {
 
     public static <T> List<T> load(String name, Class<?> clazz) {
         LOG.info("Looking for a resource file of name [{}] ...", name);
-        List<T> services = new ArrayList<T>();
+        List<T> services = new ArrayList<>();
         try {
-            ArrayList<String> names = new ArrayList<String>();
+            List<String> names = new ArrayList<>();
             final InputStream is = getResourceAsStream(getContextClassLoader(), name);
             if (is != null) {
                 BufferedReader reader;
@@ -115,14 +116,12 @@ public class ServiceProvider {
                 String serviceName = reader.readLine();
                 while (serviceName != null && !"".equals(serviceName)) {
                     LOG.info(
-                        "Creating an instance as specified by file {} which was present in the path of the context classloader.",
-                        name);
+                            "Creating an instance as specified by file {} which was present in the path of the context classloader.",
+                            name);
                     if (!names.contains(serviceName)) {
+                        services.add((T) initService(getContextClassLoader(), serviceName, clazz));
                         names.add(serviceName);
                     }
-
-                    services.add((T) initService(getContextClassLoader(), serviceName, clazz));
-
                     serviceName = reader.readLine();
                 }
                 reader.close();
@@ -166,20 +165,20 @@ public class ServiceProvider {
                     serviceClazz = classLoader.loadClass(serviceName);
                     if (clazz.isAssignableFrom(serviceClazz)) {
                         LOG.info("Loaded class {} from classloader {}", serviceClazz.getName(),
-                            objectId(classLoader));
+                                objectId(classLoader));
                     } else {
                         // This indicates a problem with the ClassLoader tree. An incompatible ClassLoader was used to load the implementation.
                         LOG.error(
-                            "Class {} loaded from classloader {} does not extend {} as loaded by this classloader.",
-                            serviceClazz.getName(),
-                            objectId(serviceClazz.getClassLoader()), clazz.getName());
+                                "Class {} loaded from classloader {} does not extend {} as loaded by this classloader.",
+                                serviceClazz.getName(),
+                                objectId(serviceClazz.getClassLoader()), clazz.getName());
                     }
                     return (T) serviceClazz.getDeclaredConstructor().newInstance();
                 } catch (ClassNotFoundException ex) {
                     if (classLoader == thisClassLoader) {
                         // Nothing more to try, onwards.
                         LOG.warn("Unable to locate any class {} via classloader {}", serviceName,
-                            objectId(classLoader));
+                                objectId(classLoader));
                         throw ex;
                     }
                     // Ignore exception, continue
@@ -187,8 +186,8 @@ public class ServiceProvider {
                     if (classLoader == thisClassLoader) {
                         // Nothing more to try, onwards.
                         LOG.warn(
-                            "Class {} cannot be loaded via classloader {}.it depends on some other class that cannot be found.",
-                            serviceClazz, objectId(classLoader));
+                                "Class {} cannot be loaded via classloader {}.it depends on some other class that cannot be found.",
+                                serviceClazz, objectId(classLoader));
                         throw e;
                     }
                     // Ignore exception, continue
