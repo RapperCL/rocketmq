@@ -133,14 +133,18 @@ public class ServiceProvider {
         } catch (Exception e) {
             LOG.error("Error occurred when looking for resource file " + name, e);
         } finally {
-            try {
-                if (is != null) is.close();
-                if (reader != null) reader.close();
-            } catch (IOException e) {
-                LOG.error("Error closing configuration file" + name, e);
-            }
+            check(is, reader, name);
         }
         return services;
+    }
+
+    private static void check(InputStream is, BufferedReader reader, String name) {
+        try {
+            if (is != null) is.close();
+            if (reader != null) reader.close();
+        } catch (IOException e) {
+            LOG.error("Error closing configuration file" + name, e);
+        }
     }
 
     public static <T> T loadClass(String name, Class<?> clazz) {
@@ -162,12 +166,7 @@ public class ServiceProvider {
         } catch (Exception e) {
             LOG.warn("Error occurred when looking for resource file " + name, e);
         } finally {
-            try {
-                if (is != null) is.close();
-                if (reader != null) reader.close();
-            } catch (IOException e) {
-                LOG.error("Error closing configuration file" + name, e);
-            }
+            check(is, reader, name);
         }
         return s;
     }
