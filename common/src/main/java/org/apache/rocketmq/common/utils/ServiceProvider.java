@@ -41,15 +41,7 @@ public class ServiceProvider {
      * JDK1.3+ <a href= "http://java.sun.com/j2se/1.3/docs/guide/jar/jar.html#Service%20Provider" > 'Service Provider'
      * specification</a>.
      */
-    public static final String TRANSACTION_SERVICE_ID = "META-INF/service/org.apache.rocketmq.broker.transaction.TransactionalMessageService";
-
-    public static final String TRANSACTION_LISTENER_ID = "META-INF/service/org.apache.rocketmq.broker.transaction.AbstractTransactionalMessageCheckListener";
-
-    public static final String HA_SERVICE_ID = "META-INF/service/org.apache.rocketmq.store.ha.HAService";
-
-    public static final String RPC_HOOK_ID = "META-INF/service/org.apache.rocketmq.remoting.RPCHook";
-
-    public static final String ACL_VALIDATOR_ID = "META-INF/service/org.apache.rocketmq.acl.AccessValidator";
+    private static final String PREFIX = "META-INF/service/";
 
     static {
         thisClassLoader = getClassLoader(ServiceProvider.class);
@@ -104,6 +96,11 @@ public class ServiceProvider {
         }
     }
 
+    public static <T> List<T> load(Class<?> clazz) {
+        String fullName = PREFIX + clazz.getName();
+        return load(fullName, clazz);
+    }
+
     public static <T> List<T> load(String name, Class<?> clazz) {
         LOG.info("Looking for a resource file of name [{}] ...", name);
         List<T> services = new ArrayList<T>();
@@ -145,6 +142,11 @@ public class ServiceProvider {
         } catch (IOException e) {
             LOG.error("Error closing configuration file" + name, e);
         }
+    }
+
+    public static <T> T loadClass(Class<?> clazz) {
+        String fullName = PREFIX + clazz.getName();
+        return loadClass(fullName, clazz);
     }
 
     public static <T> T loadClass(String name, Class<?> clazz) {

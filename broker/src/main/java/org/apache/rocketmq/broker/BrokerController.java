@@ -894,12 +894,12 @@ public class BrokerController {
     }
 
     private void initialTransaction() {
-        this.transactionalMessageService = ServiceProvider.loadClass(ServiceProvider.TRANSACTION_SERVICE_ID, TransactionalMessageService.class);
+        this.transactionalMessageService = ServiceProvider.loadClass(TransactionalMessageService.class);
         if (null == this.transactionalMessageService) {
             this.transactionalMessageService = new TransactionalMessageServiceImpl(new TransactionalMessageBridge(this, this.getMessageStore()));
             LOG.warn("Load default transaction message hook service: {}", TransactionalMessageServiceImpl.class.getSimpleName());
         }
-        this.transactionalMessageCheckListener = ServiceProvider.loadClass(ServiceProvider.TRANSACTION_LISTENER_ID, AbstractTransactionalMessageCheckListener.class);
+        this.transactionalMessageCheckListener = ServiceProvider.loadClass(AbstractTransactionalMessageCheckListener.class);
         if (null == this.transactionalMessageCheckListener) {
             this.transactionalMessageCheckListener = new DefaultTransactionalMessageCheckListener();
             LOG.warn("Load default discard message hook service: {}", DefaultTransactionalMessageCheckListener.class.getSimpleName());
@@ -914,7 +914,7 @@ public class BrokerController {
             return;
         }
 
-        List<AccessValidator> accessValidators = ServiceProvider.load(ServiceProvider.ACL_VALIDATOR_ID, AccessValidator.class);
+        List<AccessValidator> accessValidators = ServiceProvider.load(AccessValidator.class);
         if (accessValidators.isEmpty()) {
             LOG.info("The broker dose not load the AccessValidator");
             return;
@@ -941,7 +941,7 @@ public class BrokerController {
 
     private void initialRpcHooks() {
 
-        List<RPCHook> rpcHooks = ServiceProvider.load(ServiceProvider.RPC_HOOK_ID, RPCHook.class);
+        List<RPCHook> rpcHooks = ServiceProvider.load(RPCHook.class);
         if (rpcHooks == null || rpcHooks.isEmpty()) {
             return;
         }
