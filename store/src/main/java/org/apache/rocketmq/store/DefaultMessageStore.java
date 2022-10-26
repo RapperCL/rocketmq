@@ -487,7 +487,7 @@ public class DefaultMessageStore implements MessageStore {
         if (checkStoreStatus != PutMessageStatus.PUT_OK) {
             return CompletableFuture.completedFuture(new PutMessageResult(checkStoreStatus, null));
         }
-
+    
         PutMessageStatus msgCheckStatus = this.checkMessages(messageExtBatch);
         if (msgCheckStatus == PutMessageStatus.MESSAGE_ILLEGAL) {
             return CompletableFuture.completedFuture(new PutMessageResult(msgCheckStatus, null));

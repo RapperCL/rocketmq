@@ -170,13 +170,14 @@ public class EndTransactionProcessor extends AsyncNettyRequestProcessor {
     private RemotingCommand checkPrepareMessage(MessageExt msgExt, EndTransactionRequestHeader requestHeader) {
         final RemotingCommand response = RemotingCommand.createResponseCommand(null);
         if (msgExt != null) {
+            // 生产者组检查
             final String pgroupRead = msgExt.getProperty(MessageConst.PROPERTY_PRODUCER_GROUP);
             if (!pgroupRead.equals(requestHeader.getProducerGroup())) {
                 response.setCode(ResponseCode.SYSTEM_ERROR);
                 response.setRemark("The producer group wrong");
                 return response;
             }
-
+            // 消费位移检查
             if (msgExt.getQueueOffset() != requestHeader.getTranStateTableOffset()) {
                 response.setCode(ResponseCode.SYSTEM_ERROR);
                 response.setRemark("The transaction state table offset wrong");

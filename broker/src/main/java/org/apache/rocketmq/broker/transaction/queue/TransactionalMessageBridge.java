@@ -323,9 +323,8 @@ public class TransactionalMessageBridge {
 
     private void writeOp(Message message, MessageQueue mq) {
         MessageQueue opQueue;
-        if (opQueueMap.containsKey(mq)) {
-            opQueue = opQueueMap.get(mq);
-        } else {
+        // todo 1026 not null
+        if ((opQueue = opQueueMap.get(mq)) == null) {
             // todo 0817 为什么不直接加锁来控制一下呢？
             opQueue = getOpQueueByHalf(mq);
             MessageQueue oldQueue = opQueueMap.putIfAbsent(mq, opQueue);
@@ -333,6 +332,7 @@ public class TransactionalMessageBridge {
                 opQueue = oldQueue;
             }
         }
+        // 这里不可能为null
         if (opQueue == null) {
             opQueue = new MessageQueue(TransactionalMessageUtil.buildOpTopic(), mq.getBrokerName(), mq.getQueueId());
         }
