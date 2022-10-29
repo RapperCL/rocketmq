@@ -131,6 +131,7 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
         try {
             String topic = TopicValidator.RMQ_SYS_TRANS_HALF_TOPIC;
             Set<MessageQueue> msgQueues = transactionalMessageBridge.fetchMessageQueues(topic);
+            // msgQueues 不会为null
             if (msgQueues == null || msgQueues.size() == 0) {
                 log.warn("The queue of topic is empty :" + topic);
                 return;
@@ -460,6 +461,7 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
     }
 
     private MessageQueue getOpQueue(MessageQueue messageQueue) {
+        // 存放哪些被操作的消息
         MessageQueue opQueue = opQueueMap.get(messageQueue);
         if (opQueue == null) {
             opQueue = new MessageQueue(TransactionalMessageUtil.buildOpTopic(), messageQueue.getBrokerName(),

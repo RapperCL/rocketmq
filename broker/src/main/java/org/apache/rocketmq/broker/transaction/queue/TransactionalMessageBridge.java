@@ -72,19 +72,19 @@ public class TransactionalMessageBridge {
         }
 
     }
-
+    
     public long fetchConsumeOffset(MessageQueue mq) {
         // 查询 队列的offset
-        long offset = brokerController.getConsumerOffsetManager().queryOffset(TransactionalMessageUtil.buildConsumerGroup(),
-            mq.getTopic(), mq.getQueueId());
+        long offset = brokerController.getConsumerOffsetManager()
+                .queryOffset(TransactionalMessageUtil.buildConsumerGroup(), mq.getTopic(), mq.getQueueId());
         if (offset == -1) {
             offset = store.getMinOffsetInQueue(mq.getTopic(), mq.getQueueId());
         }
         return offset;
     }
-
-    // todo 0817  这个地方根据主题获取逻辑队列时，应该要做个全局轮询，否则每次都是从queueid=0的队列中获取，量大的时候，可能会导致其他队列的消息
-    // 一直不会被消费到
+    
+    // todo 0817  这个地方根据主题获取逻辑队列时，应该要做个轮询，否则每次都是从queueid=0的队列中获取，量大的时候，可能会导致其他队列的消息
+    // 一直不会被消费到, 发送时，负载均衡，而且事务的half好像只有一个队列？ 确定一下
     public Set<MessageQueue> fetchMessageQueues(String topic) {
         Set<MessageQueue> mqSet = new HashSet<>();
         TopicConfig topicConfig = selectTopicConfig(topic);
@@ -314,7 +314,7 @@ public class TransactionalMessageBridge {
      * @return This method will always return true.
      */
     private boolean addRemoveTagInTransactionOp(MessageExt prepareMessage, MessageQueue messageQueue) {
-        //todo 0813 重要标识 将tag设置为移除
+        //todo 0813 重要标识 将tag设置为移除 设置为移除之后，在何时会用到呢？ 那就是
         Message message = new Message(TransactionalMessageUtil.buildOpTopic(), TransactionalMessageUtil.REMOVETAG,
             String.valueOf(prepareMessage.getQueueOffset()).getBytes(TransactionalMessageUtil.charset));
         writeOp(message, messageQueue);
