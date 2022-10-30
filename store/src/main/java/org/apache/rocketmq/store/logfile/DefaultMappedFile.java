@@ -414,14 +414,17 @@ public class DefaultMappedFile extends AbstractMappedFile {
     @Override
     public SelectMappedBufferResult selectMappedBuffer(int pos, int size) {
         int readPosition = getReadPosition();
+        // 当前读取的位移有效
         if ((pos + size) <= readPosition) {
             if (this.hold()) {
                 this.mappedByteBufferAccessCountSinceLastSwap++;
-
+    
                 ByteBuffer byteBuffer = this.mappedByteBuffer.slice();
                 byteBuffer.position(pos);
+                // new-pos, size
                 ByteBuffer byteBufferNew = byteBuffer.slice();
                 byteBufferNew.limit(size);
+                // byteBUfferNew 已经设置了大小，size 按理就不需要传入了
                 return new SelectMappedBufferResult(this.fileFromOffset + pos, byteBufferNew, size, this);
             } else {
                 log.warn("matched, but hold failed, request pos: " + pos + ", fileFromOffset: "
@@ -434,7 +437,8 @@ public class DefaultMappedFile extends AbstractMappedFile {
 
         return null;
     }
-
+    
+    // 读取所有可读数据
     @Override
     public SelectMappedBufferResult selectMappedBuffer(int pos) {
         int readPosition = getReadPosition();
@@ -449,7 +453,7 @@ public class DefaultMappedFile extends AbstractMappedFile {
                 return new SelectMappedBufferResult(this.fileFromOffset + pos, byteBufferNew, size, this);
             }
         }
-
+        
         return null;
     }
 

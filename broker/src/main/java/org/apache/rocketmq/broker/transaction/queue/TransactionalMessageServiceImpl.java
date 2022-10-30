@@ -84,19 +84,20 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
         msgExt.putUserProperty(MessageConst.PROPERTY_TRANSACTION_CHECK_TIMES, String.valueOf(checkTime));
         return false;
     }
-
+    
+    //todo 1029 msgExt为空时，getBronTimeStamp=0，这里的记录是有问题的
     private boolean needSkip(MessageExt msgExt) {
         long valueOfCurrentMinusBorn = System.currentTimeMillis() - msgExt.getBornTimestamp();
         if (valueOfCurrentMinusBorn
-            > transactionalMessageBridge.getBrokerController().getMessageStoreConfig().getFileReservedTime()
-            * 3600L * 1000) {
-            log.info("Half message exceed file reserved time ,so skip it.messageId {},bornTime {}",
-                msgExt.getMsgId(), msgExt.getBornTimestamp());
+                > transactionalMessageBridge.getBrokerController().getMessageStoreConfig().getFileReservedTime() * 3600L
+                * 1000) {
+            log.info("Half message exceed file reserved time ,so skip it.messageId {},bornTime {}", msgExt.getMsgId(),
+                    msgExt.getBornTimestamp());
             return true;
         }
         return false;
     }
-
+    
     private boolean putBackHalfMsgQueue(MessageExt msgExt, long offset) {
         PutMessageResult putMessageResult = putBackToHalfQueueReturnResult(msgExt);
         if (putMessageResult != null
@@ -128,6 +129,7 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
         AbstractTransactionalMessageCheckListener listener) {
         try {
             String topic = TopicValidator.RMQ_SYS_TRANS_HALF_TOPIC;
+            // 这个主题的队列大小不是应该为1吗？是可配置的？
             Set<MessageQueue> msgQueues = transactionalMessageBridge.fetchMessageQueues(topic);
             if (msgQueues == null || msgQueues.size() == 0) {
                 log.warn("The queue of topic is empty :" + topic);
@@ -136,7 +138,9 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
             log.debug("Check topic={}, queues={}", topic, msgQueues);
             for (MessageQueue messageQueue : msgQueues) {
                 long startTime = System.currentTimeMillis();
+                // 根据mq获取操作的 opmq， 第一次endTransaction检查成功或回滚都会记录 代表这条消息不需要 回查了，已经提交或回滚了
                 MessageQueue opQueue = getOpQueue(messageQueue);
+                // 该messageQueue对应的 half位移以及op主题的
                 long halfOffset = transactionalMessageBridge.fetchConsumeOffset(messageQueue);
                 long opOffset = transactionalMessageBridge.fetchConsumeOffset(opQueue);
                 log.info("Before check, the queue={} msgOffset={} opOffset={}", messageQueue, halfOffset, opOffset);
@@ -158,18 +162,22 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
                 int getMessageNullCount = 1;
                 long newOffset = halfOffset;
                 long i = halfOffset;
+    
                 while (true) {
                     if (System.currentTimeMillis() - startTime > MAX_PROCESS_TIME_LIMIT) {
                         log.info("Queue={} process time reach max={}", messageQueue, MAX_PROCESS_TIME_LIMIT);
                         break;
                     }
+                    // removeMap 存放将要被removed的消息，但是还未被更新的。
                     if (removeMap.containsKey(i)) {
                         log.debug("Half offset {} has been committed/rolled back", i);
                         Long removedOpOffset = removeMap.remove(i);
                         doneOpOffset.add(removedOpOffset);
                     } else {
+                        // 获取half消息
                         GetResult getResult = getHalfMsg(messageQueue, i);
                         MessageExt msgExt = getResult.getMsg();
+                        // size ==0 也应该进入判断
                         if (msgExt == null) {
                             if (getMessageNullCount++ > MAX_RETRY_COUNT_WHEN_HALF_NULL) {
                                 break;
@@ -229,6 +237,7 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
                             }
                             listener.resolveHalfMsg(msgExt);
                         } else {
+                            // 如果不需要回查，那么则基于更新opRemove集合
                             pullResult = fillOpRemoveMap(removeMap, opQueue, pullResult.getNextBeginOffset(), halfOffset, doneOpOffset);
                             log.debug("The miss offset:{} in messageQueue:{} need to get more opMsg, result is:{}", i,
                                 messageQueue, pullResult);
@@ -238,6 +247,7 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
                     newOffset = i + 1;
                     i++;
                 }
+                // 更新half和op_half主题的位移。
                 if (newOffset != halfOffset) {
                     transactionalMessageBridge.updateConsumeOffset(messageQueue, newOffset);
                 }
@@ -276,10 +286,12 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
      */
     private PullResult fillOpRemoveMap(HashMap<Long, Long> removeMap,
         MessageQueue opQueue, long pullOffsetOfOp, long miniOffset, List<Long> doneOpOffset) {
+        // ? 找到了消息，但是解析时，遇到不合法的，返回的foundList消息为空，也算找到了消息？
         PullResult pullResult = pullOpMsg(opQueue, pullOffsetOfOp, 32);
         if (null == pullResult) {
             return null;
         }
+        // 没新消息，为空， offset非法
         if (pullResult.getPullStatus() == PullStatus.OFFSET_ILLEGAL
             || pullResult.getPullStatus() == PullStatus.NO_MATCHED_MSG) {
             log.warn("The miss op offset={} in queue={} is illegal, pullResult={}", pullOffsetOfOp, opQueue,
@@ -291,7 +303,9 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
                 pullResult);
             return pullResult;
         }
+        // 走到这里代表found， found时，size>=0
         List<MessageExt> opMsg = pullResult.getMsgFoundList();
+        // 或者size = 0时 都应该返回，
         if (opMsg == null) {
             log.warn("The miss op offset={} in queue={} is empty, pullResult={}", pullOffsetOfOp, opQueue, pullResult);
             return pullResult;
@@ -301,9 +315,11 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
             log.debug("Topic: {} tags: {}, OpOffset: {}, HalfOffset: {}", opMessageExt.getTopic(),
                 opMessageExt.getTags(), opMessageExt.getQueueOffset(), queueOffset);
             if (TransactionalMessageUtil.REMOVETAG.equals(opMessageExt.getTags())) {
+                // half消息位移 ， 如果op消息位移小于了当前half等待位移，代表已经处理了
                 if (queueOffset < miniOffset) {
                     doneOpOffset.add(opMessageExt.getQueueOffset());
                 } else {
+                    // 否则放入要被移除的map？
                     removeMap.put(queueOffset, opMessageExt.getQueueOffset());
                 }
             } else {
@@ -431,6 +447,7 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
         if (opQueue == null) {
             opQueue = new MessageQueue(TransactionalMessageUtil.buildOpTopic(), messageQueue.getBrokerName(),
                 messageQueue.getQueueId());
+            // 是否需要判断并获取旧的
             opQueueMap.put(messageQueue, opQueue);
         }
         return opQueue;
@@ -439,13 +456,16 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
 
     private GetResult getHalfMsg(MessageQueue messageQueue, long offset) {
         GetResult getResult = new GetResult();
-
+        // 应该设置一个批量值，比如默认32， 真正获取时，num并没有生效
         PullResult result = pullHalfMsg(messageQueue, offset, PULL_MSG_RETRY_NUMBER);
         getResult.setPullResult(result);
+        // todo 1029 result没有判空 bug,
+        // size = 0， 两个地方： 1 result 没有判空； 2  result.getMsgFoundList()可能为空，messageExts.get(0)会被错。
         List<MessageExt> messageExts = result.getMsgFoundList();
         if (messageExts == null) {
             return getResult;
         }
+        // 这里也有问题，如果messageExts size = 0 ，会报错， 存在messageExts ！=null, 但是size =0
         getResult.setMsg(messageExts.get(0));
         return getResult;
     }

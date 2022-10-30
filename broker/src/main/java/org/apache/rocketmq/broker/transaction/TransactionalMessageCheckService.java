@@ -30,7 +30,8 @@ public class TransactionalMessageCheckService extends ServiceThread {
     public TransactionalMessageCheckService(BrokerController brokerController) {
         this.brokerController = brokerController;
     }
-
+    
+    // brokerController != null 的判断多余
     @Override
     public String getServiceName() {
         if (brokerController != null && brokerController.getBrokerConfig().isInBrokerContainer()) {

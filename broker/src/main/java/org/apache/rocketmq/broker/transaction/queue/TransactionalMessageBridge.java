@@ -126,12 +126,14 @@ public class TransactionalMessageBridge {
             switch (getMessageResult.getStatus()) {
                 case FOUND:
                     pullStatus = PullStatus.FOUND;
+                    // 将批量消息进行解码
                     foundList = decodeMsgList(getMessageResult);
                     this.brokerController.getBrokerStatsManager().incGroupGetNums(group, topic,
                         getMessageResult.getMessageCount());
                     this.brokerController.getBrokerStatsManager().incGroupGetSize(group, topic,
                         getMessageResult.getBufferTotalSize());
                     this.brokerController.getBrokerStatsManager().incBrokerGetNums(getMessageResult.getMessageCount());
+                    // todo 1029 foundList不为null
                     if (foundList == null || foundList.size() == 0) {
                         break;
                     }
@@ -309,11 +311,12 @@ public class TransactionalMessageBridge {
      */
     private boolean addRemoveTagInTransactionOp(MessageExt prepareMessage, MessageQueue messageQueue) {
         Message message = new Message(TransactionalMessageUtil.buildOpTopic(), TransactionalMessageUtil.REMOVETAG,
-            String.valueOf(prepareMessage.getQueueOffset()).getBytes(TransactionalMessageUtil.CHARSET));
+                String.valueOf(prepareMessage.getQueueOffset()).getBytes(TransactionalMessageUtil.CHARSET));
         writeOp(message, messageQueue);
         return true;
     }
-
+    
+    // opQueueMap <逻辑队列，删除标记的逻辑队列> 两个mQ的内容唯一不同：主题： key:RMQ_SYS_TRANS_HALF_TOPIC value：RMQ_SYS_TRANS_OP_HALF_TOPIC
     private void writeOp(Message message, MessageQueue mq) {
         MessageQueue opQueue;
         if (opQueueMap.containsKey(mq)) {

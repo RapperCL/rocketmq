@@ -701,21 +701,23 @@ public class DefaultMessageStore implements MessageStore {
         }
 
         long beginTime = this.getSystemClock().now();
-
+    
         GetMessageStatus status = GetMessageStatus.NO_MESSAGE_IN_QUEUE;
         long nextBeginOffset = offset;
         long minOffset = 0;
         long maxOffset = 0;
-
+    
         GetMessageResult getResult = new GetMessageResult();
-
+    
         final long maxOffsetPy = this.commitLog.getMaxOffset();
-
+    
+        // 获取消费进度
+        // todo 1029 消息数量限制问题，
         ConsumeQueueInterface consumeQueue = findConsumeQueue(topic, queueId);
         if (consumeQueue != null) {
             minOffset = consumeQueue.getMinOffsetInQueue();
             maxOffset = consumeQueue.getMaxOffsetInQueue();
-
+        
             if (maxOffset == 0) {
                 status = GetMessageStatus.NO_MESSAGE_IN_QUEUE;
                 nextBeginOffset = nextOffsetCorrection(offset, 0);
@@ -731,7 +733,7 @@ public class DefaultMessageStore implements MessageStore {
             } else {
                 final int maxFilterMessageSize = Math.max(16000, maxMsgNums * consumeQueue.getUnitSize());
                 final boolean diskFallRecorded = this.messageStoreConfig.isDiskFallRecorded();
-
+                // 这里，是不是应该 maxTotalMsgSize == 0 ? 100 : maxTotalMsgSize;
                 long maxPullSize = Math.max(maxTotalMsgSize, 100);
                 if (maxPullSize > MAX_PULL_MSG_SIZE) {
                     LOGGER.warn("The max pull size is too large maxPullSize={} topic={} queueId={}", maxPullSize, topic, queueId);
@@ -761,7 +763,7 @@ public class DefaultMessageStore implements MessageStore {
                             CqUnit cqUnit = bufferConsumeQueue.next();
                             long offsetPy = cqUnit.getPos();
                             int sizePy = cqUnit.getSize();
-
+                            // 检查消息是否在磁盘， 当前内存中最大的位移 - 当前位移  > 24G40%， 代表此消息在内存中元节被淘汰了
                             boolean isInDisk = checkInDiskByCommitOffset(offsetPy, maxOffsetPy);
 
                             if ((cqUnit.getQueueOffset() - offset) * consumeQueue.getUnitSize() > maxFilterMessageSize) {
@@ -775,42 +777,44 @@ public class DefaultMessageStore implements MessageStore {
                             if (getResult.getBufferTotalSize() >= maxPullSize) {
                                 break;
                             }
-
+    
                             maxPhyOffsetPulling = offsetPy;
-
+    
                             //Be careful, here should before the isTheBatchFull
                             nextBeginOffset = cqUnit.getQueueOffset() + cqUnit.getBatchNum();
-
+    
                             if (nextPhyFileStartOffset != Long.MIN_VALUE) {
                                 if (offsetPy < nextPhyFileStartOffset) {
                                     continue;
                                 }
                             }
-
-                            if (messageFilter != null
-                                && !messageFilter.isMatchedByConsumeQueue(cqUnit.getValidTagsCodeAsLong(), cqUnit.getCqExtUnit())) {
+    
+                            if (messageFilter != null && !messageFilter.isMatchedByConsumeQueue(
+                                    cqUnit.getValidTagsCodeAsLong(), cqUnit.getCqExtUnit())) {
                                 if (getResult.getBufferTotalSize() == 0) {
                                     status = GetMessageStatus.NO_MATCHED_MESSAGE;
                                 }
-
+        
                                 continue;
                             }
-
+    
+                            // 获取消息
                             SelectMappedBufferResult selectResult = this.commitLog.getMessage(offsetPy, sizePy);
                             if (null == selectResult) {
                                 if (getResult.getBufferTotalSize() == 0) {
                                     status = GetMessageStatus.MESSAGE_WAS_REMOVING;
                                 }
-
+        
                                 nextPhyFileStartOffset = this.commitLog.rollNextFile(offsetPy);
                                 continue;
                             }
-
+    
                             if (messageFilter != null
                                 && !messageFilter.isMatchedByCommitLog(selectResult.getByteBuffer().slice(), null)) {
                                 if (getResult.getBufferTotalSize() == 0) {
                                     status = GetMessageStatus.NO_MATCHED_MESSAGE;
                                 }
+        
                                 // release...
                                 selectResult.release();
                                 continue;
@@ -934,23 +938,27 @@ public class DefaultMessageStore implements MessageStore {
             resultOffset = Math.min(resultOffset, logic.getMaxOffsetInQueue());
             return resultOffset;
         }
-
+    
         return 0;
     }
-
+    
+    // 根据offfset查找数据被分成了两部分： 1 获取数据大小； 2 数据解码
+    // 缺陷： 经历两次通过offset查询 mapperFile， size不确定，导致mapperFile其实也不确定，应该要两次查询
     @Override
     public MessageExt lookMessageByOffset(long commitLogOffset) {
+        // 获取字节缓存
         SelectMappedBufferResult sbr = this.commitLog.getMessage(commitLogOffset, 4);
         if (null != sbr) {
             try {
                 // 1 TOTALSIZE
                 int size = sbr.getByteBuffer().getInt();
+                // 从指定位置开始查询size大小的数据
                 return lookMessageByOffset(commitLogOffset, size);
             } finally {
                 sbr.release();
             }
         }
-
+        
         return null;
     }
 
@@ -1478,6 +1486,7 @@ public class DefaultMessageStore implements MessageStore {
         SelectMappedBufferResult sbr = this.commitLog.getMessage(commitLogOffset, size);
         if (null != sbr) {
             try {
+                // 将数据解码，解析为MessageExt
                 return MessageDecoder.decode(sbr.getByteBuffer(), true, false);
             } finally {
                 sbr.release();
