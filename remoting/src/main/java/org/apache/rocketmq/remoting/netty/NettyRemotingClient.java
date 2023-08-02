@@ -522,17 +522,20 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
     public RemotingCommand invokeSync(String addr, final RemotingCommand request, long timeoutMillis)
         throws InterruptedException, RemotingConnectException, RemotingSendRequestException, RemotingTimeoutException {
         long beginStartTime = System.currentTimeMillis();
+        // 轮询选址，寻找sockeproxy，建立连接返回channelFuture，封装channelWrapper，本地保存Map<String(addr), ChannelWrapper>
         final Channel channel = this.getAndCreateChannel(addr);
         String channelRemoteAddr = RemotingHelper.parseChannelRemoteAddr(channel);
+        // channel不可能为null
         if (channel != null && channel.isActive()) {
             long left = timeoutMillis;
             try {
+                //可以 封装一个context
                 doBeforeRpcHooks(channelRemoteAddr, request);
                 long costTime = System.currentTimeMillis() - beginStartTime;
                 left -= costTime;
-                if (left <= 0) {
-                    throw new RemotingTimeoutException("invokeSync call the addr[" + channelRemoteAddr + "] timeout");
-                }
+//                if (left <= 0) {
+//                    throw new RemotingTimeoutException("invokeSync call the addr[" + channelRemoteAddr + "] timeout");
+//                }
                 RemotingCommand response = this.invokeSyncImpl(channel, request, left);
                 doAfterRpcHooks(channelRemoteAddr, request, response);
                 this.updateChannelLastResponseTime(addr);
@@ -622,6 +625,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
         }
 
         final List<String> addrList = this.namesrvAddrList.get();
+        // 锁的粒度是否应该以channel为维度
         if (this.namesrvChannelLock.tryLock(LOCK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
             try {
                 addr = this.namesrvAddrChoosed.get();
@@ -635,6 +639,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
                 if (addrList != null && !addrList.isEmpty()) {
                     for (int i = 0; i < addrList.size(); i++) {
                         int index = this.namesrvIndex.incrementAndGet();
+                        // 轮询选择一个namesrv地址，与之建立连接
                         index = Math.abs(index);
                         index = index % addrList.size();
                         String newAddr = addrList.get(index);
