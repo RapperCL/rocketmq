@@ -178,6 +178,7 @@ public abstract class AbstractSendMessageProcessor implements NettyRequestProces
         }
 
         boolean isDLQ = false;
+        // broker端进行处理，如果已经超过了最大重试次数
         if (msgExt.getReconsumeTimes() >= maxReconsumeTimes
             || delayLevel < 0) {
 
@@ -189,6 +190,7 @@ public abstract class AbstractSendMessageProcessor implements NettyRequestProces
             BrokerMetricsManager.sendToDlqMessages.add(1, attributes);
 
             isDLQ = true;
+            // 新的topic
             newTopic = MixAll.getDLQTopic(requestHeader.getGroup());
             queueIdInt = randomQueueId(DLQ_NUMS_PER_GROUP);
 
@@ -204,7 +206,12 @@ public abstract class AbstractSendMessageProcessor implements NettyRequestProces
             }
             msgExt.setDelayTimeLevel(0);
         } else {
+            // 并发消费者重试时，每次delayLevel都是0
+            // 设置重试等级为3+重试次数，如果第一次发送成功，则延迟为5s
+            // 多次发送之后，才成功，则延迟间隔越长。
+            // 由于每次发送时的delayLevel都是0，所以普通并发消息的重试等级是不确定的。
             if (0 == delayLevel) {
+                // 为什么延迟等级+3，是因为默认有3次重试吗？
                 delayLevel = 3 + msgExt.getReconsumeTimes();
             }
 
@@ -224,6 +231,7 @@ public abstract class AbstractSendMessageProcessor implements NettyRequestProces
         msgInner.setBornTimestamp(msgExt.getBornTimestamp());
         msgInner.setBornHost(msgExt.getBornHost());
         msgInner.setStoreHost(this.getStoreHost());
+        // 重试次数+1
         msgInner.setReconsumeTimes(msgExt.getReconsumeTimes() + 1);
 
         String originMsgId = MessageAccessor.getOriginMessageId(msgExt);

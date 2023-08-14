@@ -37,6 +37,9 @@ import org.apache.rocketmq.logging.org.slf4j.LoggerFactory;
 
 /**
  * Queue consumption snapshot
+ * 0808 处理单个消息队列的消息消费情况：
+ * 1 存储拉取的消息，记录消费的情况等
+ * 2 清理本地过期的消息
  */
 public class ProcessQueue {
     public final static long REBALANCE_LOCK_MAX_LIVE_TIME =
@@ -134,6 +137,7 @@ public class ProcessQueue {
             this.treeMapLock.writeLock().lockInterruptibly();
             try {
                 int validMsgCnt = 0;
+                // 将消息添加到msgTreemap中，已offset为key，本地消息单队列消息有序
                 for (MessageExt msg : msgs) {
                     MessageExt old = msgTreeMap.put(msg.getQueueOffset(), msg);
                     if (null == old) {
@@ -148,7 +152,10 @@ public class ProcessQueue {
                     dispatchToConsume = true;
                     this.consuming = true;
                 }
-
+                /**
+                 * 如果消息不为空，则获取排在最后面的消息
+                 * 正常情况下，拉取的消息是按顺序拉取的，取最后一条消息作为当前已拉取的最新消息的offset
+                 */
                 if (!msgs.isEmpty()) {
                     MessageExt messageExt = msgs.get(msgs.size() - 1);
                     String property = messageExt.getProperty(MessageConst.PROPERTY_MAX_OFFSET);
@@ -169,6 +176,11 @@ public class ProcessQueue {
         return dispatchToConsume;
     }
 
+    /**
+     *  非中断异常，不会将锁释放掉，也不会，因为加锁过程中异常，锁会加锁失败
+     *  加锁成功之后，执行逻辑时，如果异常就释放对应的锁即可。
+     * @return
+     */
     public long getMaxSpan() {
         try {
             this.treeMapLock.readLock().lockInterruptibly();

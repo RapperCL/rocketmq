@@ -104,14 +104,17 @@ public class ThreadPoolMonitor {
         for (ThreadPoolWrapper threadPoolWrapper : MONITOR_EXECUTOR) {
             List<ThreadPoolStatusMonitor> monitors = threadPoolWrapper.getStatusPrinters();
             for (ThreadPoolStatusMonitor monitor : monitors) {
+                // 获取线程池的数量
                 double value = monitor.value(threadPoolWrapper.getThreadPoolExecutor());
                 waterMarkLogger.info("\t{}\t{}\t{}", threadPoolWrapper.getName(),
                     monitor.describe(),
                     value);
 
                 if (enablePrintJstack) {
+                    // 获取对应的线程池数据，默认每60s打印一次
                     if (monitor.needPrintJstack(threadPoolWrapper.getThreadPoolExecutor(), value) &&
                         System.currentTimeMillis() - jstackTime > jstackPeriodTime) {
+
                         jstackTime = System.currentTimeMillis();
                         jstackLogger.warn("jstack start\n{}", UtilAll.jstack());
                     }
@@ -123,6 +126,7 @@ public class ThreadPoolMonitor {
     public static void init() {
         MONITOR_SCHEDULED.scheduleAtFixedRate(ThreadPoolMonitor::logThreadPoolStatus, 20,
             threadPoolStatusPeriodTime, TimeUnit.MILLISECONDS);
+        // 这个线程池也要中断
     }
 
     public static void shutdown() {

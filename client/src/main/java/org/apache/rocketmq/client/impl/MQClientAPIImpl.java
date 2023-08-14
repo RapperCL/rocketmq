@@ -582,26 +582,23 @@ public class MQClientAPIImpl implements NameServerUpdateCallback {
             }
         }
         request.setBody(msg.getBody());
-
+        long costTime = System.currentTimeMillis() - beginStartTime;
+        if (timeoutMillis < costTime) {
+            throw new RemotingTooMuchRequestException("sendMessage call timeout");
+        }
         switch (communicationMode) {
             case ONEWAY:
                 this.remotingClient.invokeOneway(addr, request, timeoutMillis);
                 return null;
             case ASYNC:
                 final AtomicInteger times = new AtomicInteger();
-                long costTimeAsync = System.currentTimeMillis() - beginStartTime;
-                if (timeoutMillis < costTimeAsync) {
-                    throw new RemotingTooMuchRequestException("sendMessage call timeout");
-                }
-                this.sendMessageAsync(addr, brokerName, msg, timeoutMillis - costTimeAsync, request, sendCallback, topicPublishInfo, instance,
+
+                this.sendMessageAsync(addr, brokerName, msg, timeoutMillis - costTime, request, sendCallback, topicPublishInfo, instance,
                     retryTimesWhenSendFailed, times, context, producer);
                 return null;
             case SYNC:
-                long costTimeSync = System.currentTimeMillis() - beginStartTime;
-                if (timeoutMillis < costTimeSync) {
-                    throw new RemotingTooMuchRequestException("sendMessage call timeout");
-                }
-                return this.sendMessageSync(addr, brokerName, msg, timeoutMillis - costTimeSync, request);
+
+                return this.sendMessageSync(addr, brokerName, msg, timeoutMillis - costTime, request);
             default:
                 assert false;
                 break;
@@ -651,24 +648,73 @@ public class MQClientAPIImpl implements NameServerUpdateCallback {
                 public void operationComplete(ResponseFuture responseFuture) {
                     long cost = System.currentTimeMillis() - beginStartTime;
                     RemotingCommand response = responseFuture.getResponseCommand();
-                    if (null == sendCallback && response != null) {
+                    SendResult sendResult = null;
+                    boolean isolation;
+                    long currentLatency;
+                    if(response != null){
+                        try{
+                            sendResult = MQClientAPIImpl.this.processSendResponse(brokerName, msg, response, addr);
+                            if (context != null && sendResult != null) {
+                                context.setSendResult(sendResult);
+                                context.getProducer().executeSendMessageHookAfter(context);
+                            }
+                        } catch (Throwable e) {
 
+                        }
+                        isolation = false;
+                        currentLatency = System.currentTimeMillis() - responseFuture.getBeginTimestamp();
+                        //producer.updateFaultItem(brokerName, System.currentTimeMillis() - responseFuture.getBeginTimestamp(), false);
+                        return;
+                    }
+                    if(sendCallback != null){
+                        try{
+                              if(sendResult != null){
+                                  sendCallback.onSuccess(sendResult);
+                                  // 这里的时间，应该只是计算响应时间，不应该将回调的时间也加上。 业务影响了服务器的真实时间
+                                  currentLatency = System.currentTimeMillis() - responseFuture.getBeginTimestamp();
+                              } else{
+                                  isolation = true;
+                                  currentLatency = System.currentTimeMillis() - responseFuture.getBeginTimestamp();
+                                  producer.updateFaultItem(brokerName, System.currentTimeMillis() - responseFuture.getBeginTimestamp(), true);
+                                  if (!responseFuture.isSendRequestOK()) {
+                                      MQClientException ex = new MQClientException("send request failed", responseFuture.getCause());
+                                      onExceptionImpl(brokerName, msg, timeoutMillis - cost, request, sendCallback, topicPublishInfo, instance,
+                                              retryTimesWhenSendFailed, times, ex, context, true, producer);
+                                  } else if (responseFuture.isTimeout()) {
+                                      MQClientException ex = new MQClientException("wait response timeout " + responseFuture.getTimeoutMillis() + "ms",
+                                              responseFuture.getCause());
+                                      onExceptionImpl(brokerName, msg, timeoutMillis - cost, request, sendCallback, topicPublishInfo, instance,
+                                              retryTimesWhenSendFailed, times, ex, context, true, producer);
+                                  } else {
+                                      MQClientException ex = new MQClientException("unknow reseaon", responseFuture.getCause());
+                                      onExceptionImpl(brokerName, msg, timeoutMillis - cost, request, sendCallback, topicPublishInfo, instance,
+                                              retryTimesWhenSendFailed, times, ex, context, true, producer);
+                                  }
+                              }
+                        } catch (Throwable e) {
+
+                        }
+
+                        producer.updateFaultItem(brokerName, System.currentTimeMillis() - responseFuture.getBeginTimestamp(), false);
+                        return;
+                    }
+                    // 发送为null，且结果响应不为null
+                    if (null == sendCallback && response != null) {
                         try {
-                            SendResult sendResult = MQClientAPIImpl.this.processSendResponse(brokerName, msg, response, addr);
+                            sendResult = MQClientAPIImpl.this.processSendResponse(brokerName, msg, response, addr);
                             if (context != null && sendResult != null) {
                                 context.setSendResult(sendResult);
                                 context.getProducer().executeSendMessageHookAfter(context);
                             }
                         } catch (Throwable e) {
                         }
-
                         producer.updateFaultItem(brokerName, System.currentTimeMillis() - responseFuture.getBeginTimestamp(), false);
                         return;
                     }
-
+                    // sendCallback , 结果响应 均不为null
                     if (response != null) {
                         try {
-                            SendResult sendResult = MQClientAPIImpl.this.processSendResponse(brokerName, msg, response, addr);
+                            sendResult = MQClientAPIImpl.this.processSendResponse(brokerName, msg, response, addr);
                             assert sendResult != null;
                             if (context != null) {
                                 context.setSendResult(sendResult);
@@ -676,6 +722,7 @@ public class MQClientAPIImpl implements NameServerUpdateCallback {
                             }
 
                             try {
+                                // 发送回调， 感觉有点重复了
                                 sendCallback.onSuccess(sendResult);
                             } catch (Throwable e) {
                             }
@@ -687,6 +734,7 @@ public class MQClientAPIImpl implements NameServerUpdateCallback {
                                 retryTimesWhenSendFailed, times, e, context, false, producer);
                         }
                     } else {
+                        // sendCallback 不为空，结果响应为null
                         producer.updateFaultItem(brokerName, System.currentTimeMillis() - responseFuture.getBeginTimestamp(), true);
                         if (!responseFuture.isSendRequestOK()) {
                             MQClientException ex = new MQClientException("send request failed", responseFuture.getCause());
@@ -836,6 +884,8 @@ public class MQClientAPIImpl implements NameServerUpdateCallback {
                 assert false;
                 return null;
             case ASYNC:
+                // 拉取消息一定是异步的，只有异步拉取下，broker端返回消息时，会回invokerCallback,
+                // 继而回调pullCallback进行处理。
                 this.pullMessageAsync(addr, request, timeoutMillis, pullCallback);
                 return null;
             case SYNC:

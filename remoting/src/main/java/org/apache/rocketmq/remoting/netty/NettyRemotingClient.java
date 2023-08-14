@@ -236,11 +236,12 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
                     NettyRemotingClient.this.scanResponseTable();
                 } catch (Throwable e) {
                     LOGGER.error("scanResponseTable exception", e);
-                } finally {
+                } finally { // 每秒执行一次
                     timer.newTimeout(this, 1000, TimeUnit.MILLISECONDS);
                 }
             }
         };
+        // 延期3s执行， 或者直接将定时任务交给延迟任务来完成，但是不能给每个responseFuture创建延迟任务。
         this.timer.newTimeout(timerTaskScanResponseTable, 1000 * 3, TimeUnit.MILLISECONDS);
 
         int connectTimeoutMillis = this.nettyClientConfig.getConnectTimeoutMillis();
@@ -257,6 +258,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
             }
         };
         this.timer.newTimeout(timerTaskScanAvailableNameSrv, 0, TimeUnit.MILLISECONDS);
+        // 要么添加一个延迟任务，扫描可用的channelTable
     }
 
     private Map.Entry<String, SocksProxyConfig> getProxy(String addr) {
@@ -606,7 +608,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
         if (null == addr) {
             return getAndCreateNameserverChannel();
         }
-
+        // 这里的判断其实和下面的重复了
         ChannelWrapper cw = this.channelTables.get(addr);
         if (cw != null && cw.isOK()) {
             return cw.getChannel();
@@ -664,7 +666,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
 
         return null;
     }
-
+    // 返回的channel要么为null，要么有效
     private Channel createChannel(final String addr) throws InterruptedException {
         ChannelWrapper cw = this.channelTables.get(addr);
         if (cw != null && cw.isOK()) {
@@ -676,24 +678,26 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
                 boolean createNewConnection;
                 cw = this.channelTables.get(addr);
                 if (cw != null) {
-
+                    // 判断channelFuture状态
                     if (cw.isOK()) {
-                        return cw.getChannel();
+                        return cw.getChannel(); // 下面的判断是为了避免当前正在创建channel，
                     } else if (!cw.getChannelFuture().isDone()) {
+                        // 会不会存在某个链接一直在连接，此时就会导致不能创建新的连接了
                         createNewConnection = false;
-                    } else {
+                    } else { // 已经创建了channel，但是状态不ok，那么则需要重新创建。
                         this.channelTables.remove(addr);
                         createNewConnection = true;
                     }
                 } else {
                     createNewConnection = true;
                 }
-
+               // 为空，建立连接，封装channelfuture为ChannelWrapper, 建立之后，保存
                 if (createNewConnection) {
+                    // 日志位置需要进行调整
+                    LOGGER.info("createChannel: begin to connect remote host[{}] asynchronously", addr);
                     String[] hostAndPort = getHostAndPort(addr);
                     ChannelFuture channelFuture = fetchBootstrap(addr)
                         .connect(hostAndPort[0], Integer.parseInt(hostAndPort[1]));
-                    LOGGER.info("createChannel: begin to connect remote host[{}] asynchronously", addr);
                     cw = new ChannelWrapper(channelFuture);
                     this.channelTables.put(addr, cw);
                 }
@@ -708,14 +712,23 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
 
         if (cw != null) {
             ChannelFuture channelFuture = cw.getChannelFuture();
+            // 如果建立之后，这里会同步等待连接结果， 这里会超时抛出异常，但是channelTables还是存在对应的数据
+            // 所以上面会判断是否完成了。 这里感觉不需要同步阻塞呀，完全可以做成异步的
+            // 这里的等待时间，可以减少一点等待，
             if (channelFuture.awaitUninterruptibly(this.nettyClientConfig.getConnectTimeoutMillis())) {
                 if (cw.isOK()) {
                     LOGGER.info("createChannel: connect remote host[{}] success, {}", addr, channelFuture.toString());
                     return cw.getChannel();
                 } else {
+                    // 0808 这里连接失败之后，理应要将addr从channeltable中移除
+                    this.channelTables.remove(addr);
                     LOGGER.warn("createChannel: connect remote host[" + addr + "] failed, " + channelFuture.toString());
                 }
             } else {
+                // 等待时间内未获取到结果时，但是后面可能会连接成功，但是这里设置的等待时间也是超时时间，
+                // 那么这里超时，连接肯定也会超时
+                // 但是并没有做相关处理
+                // 默认连接超时 3s
                 LOGGER.warn("createChannel: connect remote host[{}] timeout {}ms, {}", addr, this.nettyClientConfig.getConnectTimeoutMillis(),
                     channelFuture.toString());
             }
@@ -735,9 +748,9 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
             try {
                 doBeforeRpcHooks(channelRemoteAddr, request);
                 long costTime = System.currentTimeMillis() - beginStartTime;
-                if (timeoutMillis < costTime) {
-                    throw new RemotingTooMuchRequestException("invokeAsync call the addr[" + channelRemoteAddr + "] timeout");
-                }
+//                if (timeoutMillis < costTime) {
+//                    throw new RemotingTooMuchRequestException("invokeAsync call the addr[" + channelRemoteAddr + "] timeout");
+//                }
                 this.invokeAsyncImpl(channel, request, timeoutMillis - costTime, new InvokeCallbackWrapper(invokeCallback, addr));
             } catch (RemotingSendRequestException e) {
                 LOGGER.warn("invokeAsync: send request exception, so close the channel[{}]", channelRemoteAddr);

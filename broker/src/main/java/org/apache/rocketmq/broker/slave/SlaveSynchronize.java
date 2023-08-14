@@ -57,7 +57,8 @@ public class SlaveSynchronize {
             this.masterAddr = masterAddr;
         }
     }
-
+    // 仅仅同步offset吗？ 日志不同步吗？ rocketmq的日志通过dledger完成主从同步，
+    // 那么当同步超过10s钟时，commitlog日志为什么没有同步呢？
     public void syncAll() {
         this.syncTopicConfig();
         this.syncConsumerOffset();

@@ -2054,6 +2054,10 @@ public class BrokerController {
         }
     }
 
+    /**
+     * 0808 启动定时服务，完成日志复制, 延迟消息任务的启动也是这里。
+     * @param shouldStart
+     */
     public synchronized void changeScheduleServiceStatus(boolean shouldStart) {
         if (isScheduleServiceStart != shouldStart) {
             LOG.info("ScheduleServiceStatus changed to {}", shouldStart);

@@ -27,7 +27,7 @@ import org.apache.rocketmq.common.consumer.ConsumeFromWhere;
  */
 public class Consumer {
 
-    public static final String CONSUMER_GROUP = "please_rename_unique_group_name_4";
+    public static final String CONSUMER_GROUP = "spacex_group";
     public static final String DEFAULT_NAMESRVADDR = "0.0.0.0:9876";
     public static final String TOPIC = "TopicTest";
 
@@ -38,7 +38,6 @@ public class Consumer {
          */
         DefaultMQPushConsumer consumer = new DefaultMQPushConsumer(CONSUMER_GROUP);
         consumer.setNamesrvAddr(DEFAULT_NAMESRVADDR);
-
         /*
          * Specify name server addresses.
          * <p/>
@@ -61,14 +60,15 @@ public class Consumer {
         /*
          * Subscribe one more topic to consume.
          */
-        consumer.subscribe(TOPIC, "*");
+        consumer.subscribe(TOPIC, "TAGB");
 
 
         /*
          *  Register callback to execute on arrival of messages fetched from brokers.
          */
         consumer.registerMessageListener((MessageListenerConcurrently) (msg, context) -> {
-            System.out.printf("%s Receive New Messages: %s %n", Thread.currentThread().getName(), msg);
+            System.out.printf(" %s %s Receive New Messages: %s %n", System.currentTimeMillis(),Thread.currentThread().getName(), msg);
+
             return ConsumeConcurrentlyStatus.CONSUME_SUCCESS;
         });
 

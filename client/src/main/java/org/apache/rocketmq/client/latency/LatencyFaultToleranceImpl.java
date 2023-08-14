@@ -32,6 +32,8 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
     @Override
     public void updateFaultItem(final String name, final long currentLatency, final long notAvailableDuration) {
         FaultItem old = this.faultItemTable.get(name);
+        // 这里会有并发问题，应该对brokername加锁控制，避免过程的faultItem创建。
+        // 加锁之后，会存在阻塞，不加会存在大量的faultItem对象
         if (null == old) {
             final FaultItem faultItem = new FaultItem(name);
             faultItem.setCurrentLatency(currentLatency);
@@ -44,6 +46,8 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
             }
         } else {
             old.setCurrentLatency(currentLatency);
+            // 这里频繁会调用内核方法，其实可以借鉴mybatis的方法，通过定时任务刷新 + id自增？ 也不需要
+            // 不可用时间越长，startTimeStamp越大，优先级越低
             old.setStartTimestamp(System.currentTimeMillis() + notAvailableDuration);
         }
     }
@@ -102,20 +106,23 @@ public class LatencyFaultToleranceImpl implements LatencyFaultTolerance<String> 
 
         @Override
         public int compareTo(final FaultItem other) {
+            // 可用性比较
             if (this.isAvailable() != other.isAvailable()) {
+                // this可用，other不可用，交换位置，将this调整到前面
+                // 升序比较时，this在other的后面
                 if (this.isAvailable())
                     return -1;
-
+                // this不可用，other可用，不交换位置。
                 if (other.isAvailable())
                     return 1;
             }
-
+            // 延迟比较，小的排在前面
             if (this.currentLatency < other.currentLatency)
                 return -1;
             else if (this.currentLatency > other.currentLatency) {
                 return 1;
             }
-
+            // 先开始的 优先， startTimeStamp小优先
             if (this.startTimestamp < other.startTimestamp)
                 return -1;
             else if (this.startTimestamp > other.startTimestamp) {

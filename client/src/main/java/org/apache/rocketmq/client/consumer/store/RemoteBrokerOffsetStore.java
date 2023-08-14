@@ -163,7 +163,7 @@ public class RemoteBrokerOffsetStore implements OffsetStore {
             }
         }
     }
-
+    // 从offsetTable中移除此逻辑队列
     public void removeOffset(MessageQueue mq) {
         if (mq != null) {
             this.offsetTable.remove(mq);

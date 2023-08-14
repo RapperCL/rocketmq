@@ -258,7 +258,10 @@ public abstract class NettyRemotingAbstract {
             log.error(RemotingHelper.parseChannelRemoteAddr(ctx.channel()) + error);
             return;
         }
-
+        /**
+         * pair的作用，其实就是绑定任意两个对象的关系，比如NettyRequestProcessor, ExecutorService
+         * 绑定某个请求处理器与对应的线程池
+         */
         Runnable run = buildProcessRequestHandler(ctx, cmd, pair, opaque);
 
         if (pair.getObject1().rejectRequest()) {
@@ -308,7 +311,7 @@ public abstract class NettyRemotingAbstract {
                 } catch (Exception e) {
                     exception = e;
                 }
-
+                // 获取执行器，处理请求
                 if (exception == null) {
                     response = pair.getObject1().processRequest(ctx, cmd);
                 } else {
@@ -354,11 +357,9 @@ public abstract class NettyRemotingAbstract {
      */
     public void processResponseCommand(ChannelHandlerContext ctx, RemotingCommand cmd) {
         final int opaque = cmd.getOpaque();
-        final ResponseFuture responseFuture = responseTable.get(opaque);
+        final ResponseFuture responseFuture = responseTable.remove(opaque);
         if (responseFuture != null) {
             responseFuture.setResponseCommand(cmd);
-
-            responseTable.remove(opaque);
 
             if (responseFuture.getInvokeCallback() != null) {
                 executeInvokeCallback(responseFuture);
@@ -401,7 +402,7 @@ public abstract class NettyRemotingAbstract {
             try {
                 responseFuture.executeInvokeCallback();
             } catch (Throwable e) {
-                log.warn("executeInvokeCallback Exception", e);
+                log.warn("execute callback in this thread exception", e);
             } finally {
                 responseFuture.release();
             }
@@ -517,10 +518,10 @@ public abstract class NettyRemotingAbstract {
         if (acquired) {
             final SemaphoreReleaseOnlyOnce once = new SemaphoreReleaseOnlyOnce(this.semaphoreAsync);
             long costTime = System.currentTimeMillis() - beginStartTime;
-            if (timeoutMillis < costTime) {
-                once.release();
-                throw new RemotingTimeoutException("invokeAsyncImpl call timeout");
-            }
+//            if (timeoutMillis < costTime) {
+//                once.release();
+//                throw new RemotingTimeoutException("invokeAsyncImpl call timeout");
+//            }
 
             final ResponseFuture responseFuture = new ResponseFuture(channel, opaque, timeoutMillis - costTime, invokeCallback, once);
             // 需要存放吗？ 异步需要的，不是oneway

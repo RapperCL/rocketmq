@@ -73,6 +73,7 @@ public abstract class TopicRouteService extends AbstractStartAndShutdown {
             executor(cacheRefreshExecutor).build(new CacheLoader<String, MessageQueueView>() {
                 @Override public @Nullable MessageQueueView load(String topic) throws Exception {
                     try {
+                        // 从namesrv获取所有的主题路由信息
                         TopicRouteData topicRouteData = mqClientAPIFactory.getClient().getTopicRouteInfoFromNameServer(topic, Duration.ofSeconds(3).toMillis());
                         return buildMessageQueueView(topic, topicRouteData);
                     } catch (Exception e) {
@@ -117,11 +118,13 @@ public abstract class TopicRouteService extends AbstractStartAndShutdown {
 
     protected static MessageQueueView getCacheMessageQueueWrapper(LoadingCache<String, MessageQueueView> topicCache,
         String key) throws Exception {
+        // 直接从缓存中获取消费队列
         MessageQueueView res = topicCache.get(key);
-        if (res != null && res.isEmptyCachedQueue()) {
+        if (res == null || res != null && res.isEmptyCachedQueue()) {
             throw new MQClientException(ResponseCode.TOPIC_NOT_EXIST,
                 "No topic route info in name server for the topic: " + key);
         }
+        // todo res存在为null的情况
         return res;
     }
 

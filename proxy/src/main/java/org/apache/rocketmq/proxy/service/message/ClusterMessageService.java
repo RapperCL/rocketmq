@@ -62,12 +62,14 @@ public class ClusterMessageService implements MessageService {
     public CompletableFuture<List<SendResult>> sendMessage(ProxyContext ctx, AddressableMessageQueue messageQueue,
         List<Message> msgList, SendMessageRequestHeader requestHeader, long timeoutMillis) {
         CompletableFuture<List<SendResult>> future;
+        // 为什么要加这个判断？ 一个是单条，一个走批量
         if (msgList.size() == 1) {
             future = this.mqClientAPIFactory.getClient().sendMessageAsync(
                     messageQueue.getBrokerAddr(),
                     messageQueue.getBrokerName(), msgList.get(0), requestHeader, timeoutMillis)
                 .thenApply(Lists::newArrayList);
         } else {
+            // 应该将批量的处理逻辑加到这里，保持一致
             future = this.mqClientAPIFactory.getClient().sendMessageAsync(
                     messageQueue.getBrokerAddr(),
                     messageQueue.getBrokerName(), msgList, requestHeader, timeoutMillis)

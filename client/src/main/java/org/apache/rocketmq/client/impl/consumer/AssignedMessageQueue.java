@@ -120,17 +120,21 @@ public class AssignedMessageQueue {
     }
 
     public void updateAssignedMessageQueue(String topic, Collection<MessageQueue> assigned) {
+        // 更新队列分配
         synchronized (this.assignedMessageQueueState) {
             Iterator<Map.Entry<MessageQueue, MessageQueueState>> it = this.assignedMessageQueueState.entrySet().iterator();
             while (it.hasNext()) {
                 Map.Entry<MessageQueue, MessageQueueState> next = it.next();
                 if (next.getKey().getTopic().equals(topic)) {
                     if (!assigned.contains(next.getKey())) {
+                        // 遍历当前已分配的队列信息，与新分配的进行比较，如果新分配的队列不包含时，就
+                        // 删除旧的队列
                         next.getValue().getProcessQueue().setDropped(true);
                         it.remove();
                     }
                 }
             }
+            // 更新分配的队列
             addAssignedMessageQueue(assigned);
         }
     }

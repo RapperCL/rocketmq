@@ -234,6 +234,7 @@ public class DefaultLitePullConsumerImpl implements MQConsumerInner {
                 }
             }
         }
+        // 启动messageQueue队列消息拉取任务
         startPullTask(mqNewSet);
     }
 

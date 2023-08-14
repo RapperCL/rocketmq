@@ -125,6 +125,7 @@ public class RemotingProtocolServer implements StartAndShutdown, RemotingProxyOu
             TimeUnit.MILLISECONDS,
             "RemotingSendMessageThread",
             config.getRemotingSendThreadPoolQueueCapacity(),
+
             new ThreadPoolHeadSlowTimeMillsMonitor(config.getRemotingWaitTimeMillsInSendQueue())
         );
 
@@ -183,7 +184,7 @@ public class RemotingProtocolServer implements StartAndShutdown, RemotingProxyOu
         );
         this.timerExecutor.scheduleAtFixedRate(this::cleanExpireRequest, 10, 10, TimeUnit.SECONDS);
     }
-
+    // 注册请求处理器，跟进对应的code，选择对应的处理器进行处理， 为什么不用disruptor
     protected void registerRemotingServer(RemotingServer remotingServer) {
         remotingServer.registerProcessor(RequestCode.SEND_MESSAGE, sendMessageActivity, this.sendMessageExecutor);
         remotingServer.registerProcessor(RequestCode.SEND_MESSAGE_V2, sendMessageActivity, this.sendMessageExecutor);
@@ -220,6 +221,7 @@ public class RemotingProtocolServer implements StartAndShutdown, RemotingProxyOu
     public void shutdown() throws Exception {
         this.defaultRemotingServer.shutdown();
         this.remotingChannelManager.shutdown();
+        // 0811 线程执行器的优化，创建时完成加入，获取通过回调完成
         this.sendMessageExecutor.shutdown();
         this.pullMessageExecutor.shutdown();
         this.heartbeatExecutor.shutdown();

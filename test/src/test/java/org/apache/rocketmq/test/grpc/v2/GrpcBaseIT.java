@@ -199,7 +199,7 @@ public class GrpcBaseIT extends BaseConf {
         }
         Server server = NettyServerBuilder.forPort(port)
             .directExecutor()
-            .addService(serviceDefinition)
+            .addService(serviceDefinition) // 添加服务处理，后面调用方调用时，会通过服务名+方法找到对应的service进行处理？
             .useTransportSecurity(selfSignedCertificate.certificate(), selfSignedCertificate.privateKey())
             .build()
             .start();

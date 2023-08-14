@@ -79,21 +79,23 @@ public class ProxyStartup {
             MessagingProcessor messagingProcessor = createMessagingProcessor();
 
             List<AccessValidator> accessValidators = loadAccessValidators();
-            // create grpcServer
+            // grpcServer 负责与客户端，namesrv进行通信？
+            // create grpcServer 监听端口，接受连接，并建立socketchannel，然后调用messageProcessor等服务对事件进行处理
             GrpcServer grpcServer = GrpcServerBuilder.newBuilder(executor, ConfigurationManager.getProxyConfig().getGrpcServerPort())
                 .addService(createServiceProcessor(messagingProcessor))
                 .addService(ChannelzService.newInstance(100))
                 .addService(ProtoReflectionService.newInstance())
                 .configInterceptor(accessValidators)
                 .build();
+            // 0811 都在一个线程中完成，要不要指定优先级呢？ 按理来说，grpcServer需要优先关闭。
             PROXY_START_AND_SHUTDOWN.appendStartAndShutdown(grpcServer);
-
+            // 同时支持grpc以及remoting协议
             RemotingProtocolServer remotingServer = new RemotingProtocolServer(messagingProcessor, accessValidators);
             PROXY_START_AND_SHUTDOWN.appendStartAndShutdown(remotingServer);
 
             // start servers one by one.
             PROXY_START_AND_SHUTDOWN.start();
-
+            // 添加回调， proxy的回调交给了一个线程来完成，根据加入顺序依次关闭
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 log.info("try to shutdown server");
                 try {

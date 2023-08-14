@@ -89,14 +89,19 @@ public class LocalMessageService implements MessageService {
         List<Message> msgList, SendMessageRequestHeader requestHeader, long timeoutMillis) {
         byte[] body;
         String messageId;
-        if (msgList.size() > 1) {
+        // 这里的msgList.size 应该换成requestHeader
+        if (requestHeader.isBatch()){
             requestHeader.setBatch(true);
             MessageBatch msgBatch = MessageBatch.generateFromList(msgList);
             MessageClientIDSetter.setUniqID(msgBatch);
             body = msgBatch.encode();
             msgBatch.setBody(body);
             messageId = MessageClientIDSetter.getUniqID(msgBatch);
-        } else {
+        }
+//        if (msgList.size() > 1) {
+//
+//        }
+         else {
             Message message = msgList.get(0);
             body = message.getBody();
             messageId = MessageClientIDSetter.getUniqID(message);

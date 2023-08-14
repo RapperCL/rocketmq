@@ -143,7 +143,9 @@ public class HookUtils {
                     }
                 }
             }
-            // Delay Delivery
+            //0808 Delay Delivery, 对于rocketmq而言，只有事务消息才会进行16次延迟重试，对于普通消息而言，
+            // 会根据我们配置的重试次数进行重试。所谓普通消息的重试也是直接将消息重新写入到对应的重试主题下，
+            //
             if (msg.getDelayTimeLevel() > 0) {
                 transformDelayLevelMessage(brokerController, msg);
             }
@@ -229,8 +231,9 @@ public class HookUtils {
         MessageAccessor.putProperty(msg, MessageConst.PROPERTY_REAL_TOPIC, msg.getTopic());
         MessageAccessor.putProperty(msg, MessageConst.PROPERTY_REAL_QUEUE_ID, String.valueOf(msg.getQueueId()));
         msg.setPropertiesString(MessageDecoder.messageProperties2String(msg.getProperties()));
-
+        // 延迟消息使用固定主题
         msg.setTopic(TopicValidator.RMQ_SYS_SCHEDULE_TOPIC);
+        // 跟进延迟等级确定queueID
         msg.setQueueId(ScheduleMessageService.delayLevel2QueueId(msg.getDelayTimeLevel()));
     }
 

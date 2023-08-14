@@ -19,10 +19,14 @@ package org.apache.rocketmq.client.impl.consumer;
 import org.apache.rocketmq.common.message.MessageQueue;
 import org.apache.rocketmq.common.message.MessageRequestMode;
 
+/**
+ * 0808 拉取单个消息队列的消息
+ */
 public class PullRequest implements MessageRequest {
+    // 用于获取对应的MQConsumerInner
     private String consumerGroup;
     private MessageQueue messageQueue;
-    private ProcessQueue processQueue;
+    private ProcessQueue processQueue;// 记录处理队列，获取到消息之后，将请求放入到此队列
     private long nextOffset;
     private boolean previouslyLocked = false;
 

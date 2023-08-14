@@ -71,7 +71,7 @@ public class ConsumerStatsManager {
     public void incConsumeRT(final String group, final String topic, final long rt) {
         this.topicAndGroupConsumeRT.addRTValue(topic + "@" + group, (int) rt, 1);
     }
-
+    // 消息数量为零时，应该不需要记录吧
     public void incConsumeOKTPS(final String group, final String topic, final long msgs) {
         this.topicAndGroupConsumeOKTPS.addValue(topic + "@" + group, (int) msgs, 1);
     }

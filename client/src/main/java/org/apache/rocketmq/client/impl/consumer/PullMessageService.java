@@ -41,7 +41,7 @@ public class PullMessageService extends ServiceThread {
     }
 
     public void executePullRequestLater(final PullRequest pullRequest, final long timeDelay) {
-        if (!isStopped()) {
+        if (!isStopped()) { // 失败之后，延迟重新放入
             this.scheduledExecutorService.schedule(new Runnable() {
                 @Override
                 public void run() {
@@ -119,7 +119,7 @@ public class PullMessageService extends ServiceThread {
         logger.info(this.getServiceName() + " service started");
 
         while (!this.isStopped()) {
-            try {
+            try { //1 messageRequestQueue 存放拉取请求
                 MessageRequest messageRequest = this.messageRequestQueue.take();
                 if (messageRequest.getMessageRequestMode() == MessageRequestMode.POP) {
                     this.popMessage((PopRequest) messageRequest);

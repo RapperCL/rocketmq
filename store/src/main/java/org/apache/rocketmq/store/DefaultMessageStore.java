@@ -2879,7 +2879,8 @@ public class DefaultMessageStore implements MessageStore {
         @Override
         public void run() {
             DefaultMessageStore.LOGGER.info(this.getServiceName() + " service started");
-
+            // 新版的实现，是有reputMessageService自循环将commitlog中的数据取出之后，投递到consumerqueue中
+            // 这样的做法取代了之前的通过事件驱动，因为事件驱动会丢失，丢失之后，将会导致consumerqueue消息缺失。
             while (!this.isStopped()) {
                 try {
                     TimeUnit.MILLISECONDS.sleep(1);

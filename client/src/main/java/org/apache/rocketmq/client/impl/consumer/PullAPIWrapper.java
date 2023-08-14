@@ -75,15 +75,16 @@ public class PullAPIWrapper {
         PullResultExt pullResultExt = (PullResultExt) pullResult;
 
         this.updatePullFromWhichNode(mq, pullResultExt.getSuggestWhichBrokerId());
-        if (PullStatus.FOUND == pullResult.getPullStatus()) {
-            ByteBuffer byteBuffer = ByteBuffer.wrap(pullResultExt.getMessageBinary());
+        // 寻找到消息，并将消息解码，
+            if (PullStatus.FOUND == pullResult.getPullStatus()) {
+                ByteBuffer byteBuffer = ByteBuffer.wrap(pullResultExt.getMessageBinary());
             List<MessageExt> msgList = MessageDecoder.decodesBatch(
                 byteBuffer,
                 this.mQClientFactory.getClientConfig().isDecodeReadBody(),
                 this.mQClientFactory.getClientConfig().isDecodeDecompressBody(),
                 true
             );
-
+            // 这个是啥意思，内部批量&&需要wrap
             boolean needDecodeInnerMessage = false;
             for (MessageExt messageExt: msgList) {
                 if (MessageSysFlag.check(messageExt.getSysFlag(), MessageSysFlag.INNER_BATCH_FLAG)
@@ -110,6 +111,7 @@ public class PullAPIWrapper {
             }
 
             List<MessageExt> msgListFilterAgain = msgList;
+            // 过滤消息，通过tag过滤
             if (!subscriptionData.getTagsSet().isEmpty() && !subscriptionData.isClassFilterMode()) {
                 msgListFilterAgain = new ArrayList<>(msgList.size());
                 for (MessageExt msg : msgList) {
@@ -237,7 +239,7 @@ public class PullAPIWrapper {
             if (PullSysFlag.hasClassFilterFlag(sysFlagInner)) {
                 brokerAddr = computePullFromWhichFilterServer(mq.getTopic(), brokerAddr);
             }
-
+            // 拉取消息
             PullResult pullResult = this.mQClientFactory.getMQClientAPIImpl().pullMessage(
                 brokerAddr,
                 requestHeader,

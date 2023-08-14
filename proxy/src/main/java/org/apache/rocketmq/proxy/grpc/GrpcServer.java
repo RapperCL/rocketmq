@@ -37,7 +37,9 @@ public class GrpcServer implements StartAndShutdown {
         this.server.start();
         log.info("grpc server start successfully.");
     }
-
+    /**
+     * 0811 实现回调钩子函数,
+     */
     public void shutdown() {
         try {
             this.server.shutdown().awaitTermination(30, TimeUnit.SECONDS);

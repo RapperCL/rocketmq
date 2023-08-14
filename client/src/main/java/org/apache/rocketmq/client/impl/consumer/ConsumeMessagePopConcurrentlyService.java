@@ -383,6 +383,7 @@ public class ConsumeMessagePopConcurrentlyService implements ConsumeMessageServi
 
         @Override
         public void run() {
+            // 通过processQueue来标识当前处理队列是否已经被移除？
             if (this.processQueue.isDropped()) {
                 log.info("the message queue not be able to consume, because it's dropped(pop). group={} {}", ConsumeMessagePopConcurrentlyService.this.consumerGroup, this.messageQueue);
                 return;

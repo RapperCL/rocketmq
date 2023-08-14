@@ -138,6 +138,7 @@ public class ScheduleMessageService extends ConfigManager {
             if (this.enableAsyncDeliver) {
                 this.handleExecutorService = new ScheduledThreadPoolExecutor(this.maxDelayLevel, new ThreadFactoryImpl("ScheduleMessageExecutorHandleThread_"));
             }
+            // 所有延迟等级对应的定时任务开启
             for (Map.Entry<Integer, Long> entry : this.delayLevelTable.entrySet()) {
                 Integer level = entry.getKey();
                 Long timeDelay = entry.getValue();
@@ -396,6 +397,7 @@ public class ScheduleMessageService extends ConfigManager {
         }
 
         public void executeOnTimeUp() {
+            // 获取当前延迟主题对应的消息队列
             ConsumeQueueInterface cq =
                 ScheduleMessageService.this.brokerController.getMessageStore().getConsumeQueue(TopicValidator.RMQ_SYS_SCHEDULE_TOPIC,
                     delayLevel2QueueId(delayLevel));
@@ -451,7 +453,7 @@ public class ScheduleMessageService extends ConfigManager {
                         ScheduleMessageService.this.updateOffset(this.delayLevel, currOffset);
                         return;
                     }
-
+                    // 通过物理位移+size获取消息
                     MessageExt msgExt = ScheduleMessageService.this.brokerController.getMessageStore().lookMessageByOffset(offsetPy, sizePy);
                     if (msgExt == null) {
                         continue;

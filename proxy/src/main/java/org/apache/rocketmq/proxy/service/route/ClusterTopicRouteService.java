@@ -38,6 +38,7 @@ public class ClusterTopicRouteService extends TopicRouteService {
     @Override
     public ProxyTopicRouteData getTopicRouteForProxy(ProxyContext ctx, List<Address> requestHostAndPortList,
         String topicName) throws Exception {
+        // 这里的获取，会不会存在为空的情况呢？ 感觉会存在为空的情况
         TopicRouteData topicRouteData = getAllMessageQueueView(ctx, topicName).getTopicRouteData();
 
         ProxyTopicRouteData proxyTopicRouteData = new ProxyTopicRouteData();

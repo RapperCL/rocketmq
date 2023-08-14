@@ -465,6 +465,7 @@ public class MixAll {
 
     public static boolean compareAndIncreaseOnly(final AtomicLong target, final long value) {
         long prev = target.get();
+        // 更新时，只有大于情况下，才进行更新
         while (value > prev) {
             boolean updated = target.compareAndSet(prev, value);
             if (updated)

@@ -112,7 +112,7 @@ public class DLedgerRoleChangeHandler implements DLedgerLeaderElector.RoleChange
             slaveSyncFuture = this.brokerController.getScheduledExecutorService().scheduleAtFixedRate(new Runnable() {
                 @Override
                 public void run() {
-                    try {
+                    try {  // 同步时间超过10s钟时，同步所有的日志
                         if (System.currentTimeMillis() - lastSyncTimeMs > 10 * 1000) {
                             brokerController.getSlaveSynchronize().syncAll();
                             lastSyncTimeMs = System.currentTimeMillis();
@@ -160,6 +160,7 @@ public class DLedgerRoleChangeHandler implements DLedgerLeaderElector.RoleChange
         LOGGER.info("Begin to change to master brokerName={}", this.brokerController.getBrokerConfig().getBrokerName());
 
         //handle the slave synchronise
+        // 选主完成之后，处理slave的日志同步
         handleSlaveSynchronize(role);
 
         this.brokerController.changeSpecialServiceStatus(true);

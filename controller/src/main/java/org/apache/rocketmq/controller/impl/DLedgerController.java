@@ -543,6 +543,8 @@ public class DLedgerController implements Controller {
                         // Because the role becomes to leader, but the memory statemachine of the controller is still in the old point,
                         // some committed logs have not been applied. Therefore, we must first process an empty request to DLedger,
                         // and after the request is committed, the controller can provide services(startScheduling).
+                        // 成为leader之后，内存中的statemachine还是停留在旧的point，一些log的commit没有被apply，所以这里先发送一个空的，
+                        // 保证请求被commit，控制器再提供服务？
                         int tryTimes = 0;
                         while (true) {
                             final AppendEntryRequest request = new AppendEntryRequest();

@@ -88,6 +88,7 @@ public class ProducerProcessor extends AbstractProcessor {
             for (Message msg : messageList) {
                 MessageClientIDSetter.setUniqID(msg);
             }
+            // 如果size > 0 ，则batch = true
             SendMessageRequestHeader requestHeader = buildSendMessageRequestHeader(messageList, producerGroup, sysFlag, messageQueue.getQueueId());
 
             future = this.serviceManager.getMessageService().sendMessage(
