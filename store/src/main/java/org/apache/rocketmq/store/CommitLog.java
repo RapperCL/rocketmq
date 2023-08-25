@@ -641,6 +641,7 @@ public class CommitLog {
                 }
                 // 主题修改，那原本的主题呢？ 已经保存了
                 topic = TopicValidator.RMQ_SYS_SCHEDULE_TOPIC;
+                // 根据延迟级别设置队列id
                 int queueId = ScheduleMessageService.delayLevel2QueueId(msg.getDelayTimeLevel());
 
                 // Backup real topic, queueId

@@ -1295,6 +1295,7 @@ public class DefaultMQProducerImpl implements MQProducerInner {
         }
 
         try {
+            // 回调本地的事务执行之后，
             this.endTransaction(msg, sendResult, localTransactionState, localException);
         } catch (Exception e) {
             log.warn("local transaction execute " + localTransactionState + ", but end broker transaction failed", e);

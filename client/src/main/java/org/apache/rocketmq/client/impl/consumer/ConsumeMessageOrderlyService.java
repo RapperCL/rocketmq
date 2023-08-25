@@ -305,7 +305,7 @@ public class ConsumeMessageOrderlyService implements ConsumeMessageService {
                             consumeRequest.getProcessQueue(),
                             consumeRequest.getMessageQueue(),
                             context.getSuspendCurrentQueueTimeMillis());
-                        // 如果是重试消费的话，那么则会中断当前的消费过程
+                        // 如果是重试消费的话，那么则会中断当前的消费过程，避免当前继续消费，导致消息乱序
                         continueConsume = false;
                         //
                     } else {

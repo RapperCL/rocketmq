@@ -333,6 +333,7 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
         final MessageQueue messageQueue
     ) {
 
+        // 提交失败之后，延迟5s重新进行投递
         this.scheduledExecutorService.schedule(new Runnable() {
 
             @Override

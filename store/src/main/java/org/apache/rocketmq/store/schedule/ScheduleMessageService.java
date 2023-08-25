@@ -338,6 +338,7 @@ public class ScheduleMessageService extends ConfigManager {
         return msgInner;
     }
 
+    // 不同的延迟等级启动不同的延迟任务
     class DeliverDelayedMessageTimerTask implements Runnable {
         private final int delayLevel;
         private final long offset;
@@ -432,7 +433,7 @@ public class ScheduleMessageService extends ConfigManager {
                         this.scheduleNextTimerTask(nextOffset, DELAY_FOR_A_WHILE);
                         return;
                     }
-
+                    // 从comsumerQueue中获取的消息，解析出commitLog的offset位移+size之后，从commitLog中查找
                     MessageExt msgExt = ScheduleMessageService.this.defaultMessageStore.lookMessageByOffset(offsetPy, sizePy);
                     if (msgExt == null) {
                         continue;
@@ -446,6 +447,7 @@ public class ScheduleMessageService extends ConfigManager {
                     }
 
                     boolean deliverSuc;
+                    // 查询的真实消息写入到commitLog中
                     if (ScheduleMessageService.this.enableAsyncDeliver) {
                         deliverSuc = this.asyncDeliver(msgInner, msgExt.getMsgId(), nextOffset, offsetPy, sizePy);
                     } else {

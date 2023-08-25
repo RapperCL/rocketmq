@@ -16,7 +16,7 @@
  */
 package org.apache.rocketmq.broker.transaction.queue;
 
-import com.alibaba.fastjson.JSONObject;
+
 import org.apache.rocketmq.broker.transaction.AbstractTransactionalMessageCheckListener;
 import org.apache.rocketmq.broker.transaction.OperationResult;
 import org.apache.rocketmq.broker.transaction.TransactionalMessageService;
@@ -177,7 +177,7 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
                     } else {
                         // todo 0813   有点不理解， 为什么只获取第一条消息进行检测？
                         GetResult getResult = getHalfMsg(messageQueue, i);
-                        log.info("cyCal check halfMsg getResult:{}", JSONObject.toJSONString(getResult));
+                        log.info("cyCal check halfMsg getResult:{}", getResult);
                         // 这里的msgEx仅仅是list.get(0)
                         MessageExt msgExt = getResult.getMsg();
                         if (msgExt == null) {
@@ -214,6 +214,7 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
                         //
                         long valueOfCurrentMinusBorn = System.currentTimeMillis() - msgExt.getBornTimestamp();
                         long checkImmunityTime = transactionTimeout;
+                        // 免疫时间
                         String checkImmunityTimeStr = msgExt.getUserProperty(MessageConst.PROPERTY_CHECK_IMMUNITY_TIME_IN_SECONDS);
                         if (null != checkImmunityTimeStr) {
                             checkImmunityTime = getImmunityTime(checkImmunityTimeStr, transactionTimeout);

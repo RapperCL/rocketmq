@@ -488,7 +488,7 @@ public class MappedFileQueue {
                         this.mappedFileSize,
                         this.mappedFiles.size());
                 } else {
-                    // 计算当前offset处于那个页
+                    // 计算当前offset处于那个页 offset / this.mappedFileSize =
                     int index = (int) ((offset / this.mappedFileSize) - (firstMappedFile.getFileFromOffset() / this.mappedFileSize));
                     MappedFile targetFile = null;
                     try {

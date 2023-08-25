@@ -199,10 +199,11 @@ public class ProcessQueue {
             this.treeMapLock.writeLock().lockInterruptibly();
             this.lastConsumeTimestamp = now;
             try {
+                // 当前消费的消息id
                 if (!msgTreeMap.isEmpty()) {
                     result = this.queueOffsetMax + 1;
                     int removedCnt = 0;
-                    // 将以消费的进行移除
+                    // 将已消费完的进行移除
                     for (MessageExt msg : msgs) {
                         MessageExt prev = msgTreeMap.remove(msg.getQueueOffset());
                         if (prev != null) {
@@ -213,6 +214,7 @@ public class ProcessQueue {
                     msgCount.addAndGet(removedCnt);
                     //todo 0828  存在未消费完的话，则将offset置为当前未消费最小的位移，防止消息丢失。（更新了位移为最大的，结果并没有消费完，导致
                     // 后续拉取消息时，也不会拉取了， 正常来说，这次未消费的，下次应该会继续拉取。
+                    // 同时我们可以发现，并行消费时，一定要考虑消费幂等性，因为重新部署等情况，都会导致并行消费
                     if (!msgTreeMap.isEmpty()) {
                         result = msgTreeMap.firstKey();
                     }

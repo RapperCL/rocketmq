@@ -2018,7 +2018,7 @@ public class DefaultMessageStore implements MessageStore {
             return 1000 * 60;
         }
     }
-// todo 分发线程
+// todo 分发线程  轮询获取最近写入的消息并分发给cq和iq
     class ReputMessageService extends ServiceThread {
 
         private volatile long reputFromOffset = 0;
