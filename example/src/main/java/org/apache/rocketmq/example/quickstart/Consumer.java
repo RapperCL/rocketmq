@@ -60,7 +60,7 @@ public class Consumer {
         /*
          * Subscribe one more topic to consume.
          */
-        consumer.subscribe(TOPIC, "TAGB");
+        consumer.subscribe(TOPIC, "TagB || TagA");
 
 
         /*

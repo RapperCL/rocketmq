@@ -219,6 +219,7 @@ public class RocketMQSerializable {
         cmd.setRemark(readStr(headerBuffer, false, headerLen));
 
         // HashMap<String, String> extFields
+        int remindLength = headerBuffer.maxCapacity() - headerBuffer.readerIndex();
         int extFieldsLength = headerBuffer.readInt();
         if (extFieldsLength > 0) {
             if (extFieldsLength > headerLen) {

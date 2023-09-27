@@ -25,6 +25,7 @@ import apache.rocketmq.v2.MessageQueue;
 import apache.rocketmq.v2.QueryRouteRequest;
 import apache.rocketmq.v2.QueryRouteResponse;
 import apache.rocketmq.v2.Resource;
+import apache.rocketmq.v2.SendMessageRequest;
 import io.grpc.Context;
 import io.grpc.Metadata;
 import io.grpc.stub.StreamObserver;
@@ -107,6 +108,9 @@ public class GrpcMessagingApplicationTest extends InitConfigTest {
         metadata.put(InterceptorConstants.LANGUAGE, JAVA);
         metadata.put(InterceptorConstants.REMOTE_ADDRESS, REMOTE_ADDR);
         metadata.put(InterceptorConstants.LOCAL_ADDRESS, LOCAL_ADDR);
+
+        SendMessageRequest requests =  SendMessageRequest.newBuilder().build();
+        grpcMessagingApplication.sendMessage(requests, null);
 
         Assert.assertNotNull(Context.current()
             .withValue(InterceptorConstants.METADATA, metadata)

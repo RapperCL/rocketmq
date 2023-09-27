@@ -30,7 +30,7 @@ public class Producer {
     /**
      * The number of produced messages.
      */
-    public static final int MESSAGE_COUNT = 30;
+    public static final int MESSAGE_COUNT = 10;
     public static final String PRODUCER_GROUP = "spacex_group";
     public static final String DEFAULT_NAMESRVADDR = "0.0.0.0:9876";
     public static final String TOPIC = "TopicTest";
@@ -72,7 +72,8 @@ public class Producer {
                     TAG /* Tag */,
                     ("Hello RocketMQ " + i).getBytes(RemotingHelper.DEFAULT_CHARSET) /* Message body */
                 );
-
+                msg.getProperties().put("cl","best");
+                msg.getProperties().put("serialization", "rocketmq");
                 /*
                  * Call send message to deliver message to one of brokers.
                  */

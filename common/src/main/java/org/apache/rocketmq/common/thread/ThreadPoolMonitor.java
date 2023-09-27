@@ -21,12 +21,8 @@ import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
+
 import org.apache.rocketmq.common.UtilAll;
 import org.apache.rocketmq.logging.org.slf4j.Logger;
 import org.apache.rocketmq.logging.org.slf4j.LoggerFactory;
@@ -60,7 +56,7 @@ public class ThreadPoolMonitor {
         TimeUnit unit,
         String name,
         int queueCapacity) {
-        return createAndMonitor(corePoolSize, maximumPoolSize, keepAliveTime, unit, name, queueCapacity, Collections.emptyList());
+        return createAndMonitor(corePoolSize, maximumPoolSize, keepAliveTime, unit, name, queueCapacity, null,  Collections.emptyList());
     }
 
     public static ThreadPoolExecutor createAndMonitor(int corePoolSize,
@@ -70,8 +66,20 @@ public class ThreadPoolMonitor {
         String name,
         int queueCapacity,
         ThreadPoolStatusMonitor... threadPoolStatusMonitors) {
-        return createAndMonitor(corePoolSize, maximumPoolSize, keepAliveTime, unit, name, queueCapacity,
+        return createAndMonitor(corePoolSize, maximumPoolSize, keepAliveTime, unit, name, queueCapacity,null,
             Lists.newArrayList(threadPoolStatusMonitors));
+    }
+
+    public static ThreadPoolExecutor createAndMonitor(int corePoolSize,
+                                                      int maximumPoolSize,
+                                                      long keepAliveTime,
+                                                      TimeUnit unit,
+                                                      String name,
+                                                      int queueCapacity,RejectedExecutionHandler handler,
+                                                      ThreadPoolStatusMonitor... threadPoolStatusMonitors){
+        return createAndMonitor(corePoolSize, maximumPoolSize, keepAliveTime, unit, name, queueCapacity,handler,
+                Lists.newArrayList(threadPoolStatusMonitors));
+
     }
 
     public static ThreadPoolExecutor createAndMonitor(int corePoolSize,
@@ -79,8 +87,11 @@ public class ThreadPoolMonitor {
         long keepAliveTime,
         TimeUnit unit,
         String name,
-        int queueCapacity,
+        int queueCapacity,RejectedExecutionHandler handler,
         List<ThreadPoolStatusMonitor> threadPoolStatusMonitors) {
+        if(handler == null){
+            handler = new ThreadPoolExecutor.DiscardOldestPolicy();
+        }
         ThreadPoolExecutor executor = new FutureTaskExtThreadPoolExecutor(
             corePoolSize,
             maximumPoolSize,
@@ -88,7 +99,8 @@ public class ThreadPoolMonitor {
             unit,
             new LinkedBlockingQueue<>(queueCapacity),
             new ThreadFactoryBuilder().setNameFormat(name + "-%d").build(),
-            new ThreadPoolExecutor.DiscardOldestPolicy());
+            // 默认指定丢弃最早的，丢弃queue中的第一个
+            handler);
         List<ThreadPoolStatusMonitor> printers = Lists.newArrayList(new ThreadPoolQueueSizeMonitor(queueCapacity));
         printers.addAll(threadPoolStatusMonitors);
 

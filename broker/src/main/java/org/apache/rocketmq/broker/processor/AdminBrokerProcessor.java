@@ -2157,7 +2157,7 @@ public class AdminBrokerProcessor implements NettyRequestProcessor {
             }
         }
         SelectMappedBufferResult selectMappedBufferResult = null;
-        try {
+        try { // 从请求参数中获取对应的msgId，根据msgId查询到对应的消息
             MessageId messageId = MessageDecoder.decodeMessageId(requestHeader.getMsgId());
             selectMappedBufferResult = this.brokerController.getMessageStore().selectOneMessageByOffset(messageId.getOffset());
 

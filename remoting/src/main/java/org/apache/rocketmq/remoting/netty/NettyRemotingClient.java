@@ -748,9 +748,9 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
             try {
                 doBeforeRpcHooks(channelRemoteAddr, request);
                 long costTime = System.currentTimeMillis() - beginStartTime;
-//                if (timeoutMillis < costTime) {
-//                    throw new RemotingTooMuchRequestException("invokeAsync call the addr[" + channelRemoteAddr + "] timeout");
-//                }
+                if (timeoutMillis < costTime) {
+                    throw new RemotingTooMuchRequestException("invokeAsync call the addr[" + channelRemoteAddr + "] timeout");
+                }
                 this.invokeAsyncImpl(channel, request, timeoutMillis - costTime, new InvokeCallbackWrapper(invokeCallback, addr));
             } catch (RemotingSendRequestException e) {
                 LOGGER.warn("invokeAsync: send request exception, so close the channel[{}]", channelRemoteAddr);
@@ -1010,7 +1010,7 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
             closeChannel(ctx.channel());
             super.channelInactive(ctx);
         }
-
+        //  在connectiongHandler中完成对心跳超时事件的处理
         @Override
         public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
             if (evt instanceof IdleStateEvent) {

@@ -518,10 +518,10 @@ public abstract class NettyRemotingAbstract {
         if (acquired) {
             final SemaphoreReleaseOnlyOnce once = new SemaphoreReleaseOnlyOnce(this.semaphoreAsync);
             long costTime = System.currentTimeMillis() - beginStartTime;
-//            if (timeoutMillis < costTime) {
-//                once.release();
-//                throw new RemotingTimeoutException("invokeAsyncImpl call timeout");
-//            }
+            if (timeoutMillis > 0 && timeoutMillis < costTime) {
+                once.release();
+                throw new RemotingTimeoutException("invokeAsyncImpl call timeout");
+            }
 
             final ResponseFuture responseFuture = new ResponseFuture(channel, opaque, timeoutMillis - costTime, invokeCallback, once);
             // 需要存放吗？ 异步需要的，不是oneway
@@ -594,6 +594,8 @@ public abstract class NettyRemotingAbstract {
     public void invokeOnewayImpl(final Channel channel, final RemotingCommand request, final long timeoutMillis)
         throws InterruptedException, RemotingTooMuchRequestException, RemotingTimeoutException, RemotingSendRequestException {
         request.markOnewayRPC();
+        // 再获取信号量时，才会进入阻塞获取， 此时<=0 ,会直接返回，
+        // time >=0 时，进行阻塞
         boolean acquired = this.semaphoreOneway.tryAcquire(timeoutMillis, TimeUnit.MILLISECONDS);
         if (acquired) {
             final SemaphoreReleaseOnlyOnce once = new SemaphoreReleaseOnlyOnce(this.semaphoreOneway);

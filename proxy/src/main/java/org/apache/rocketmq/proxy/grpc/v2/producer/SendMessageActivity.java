@@ -76,13 +76,13 @@ public class SendMessageActivity extends AbstractMessingActivity {
             apache.rocketmq.v2.Message message = messageList.get(0);
             Resource topic = message.getTopic();
             validateTopic(topic);
-
+            // 消息的真正发送，通过messageProcessor进行发送
             future = this.messagingProcessor.sendMessage(
                 ctx,
                 new SendMessageQueueSelector(request),
                 GrpcConverter.getInstance().wrapResourceWithNamespace(topic),
                 buildSysFlag(message),
-                buildMessage(ctx, request.getMessagesList(), topic)
+                buildMessage(ctx, request.getMessagesList())
             ).thenApply(result -> convertToSendMessageResponse(ctx, request, result));
         } catch (Throwable t) {
             future.completeExceptionally(t);
@@ -90,8 +90,9 @@ public class SendMessageActivity extends AbstractMessingActivity {
         return future;
     }
 
-    protected List<Message> buildMessage(ProxyContext context, List<apache.rocketmq.v2.Message> protoMessageList,
-        Resource topic) {
+    // todo 減少非必要传参
+    protected List<Message> buildMessage(ProxyContext context, List<apache.rocketmq.v2.Message> protoMessageList) {
+        Resource topic = protoMessageList.get(0).getTopic();
         String topicName = GrpcConverter.getInstance().wrapResourceWithNamespace(topic);
         List<Message> messageExtList = new ArrayList<>();
         for (apache.rocketmq.v2.Message protoMessage : protoMessageList) {
@@ -370,14 +371,14 @@ public class SendMessageActivity extends AbstractMessingActivity {
         @Override
         public AddressableMessageQueue select(ProxyContext ctx, MessageQueueView messageQueueView) {
             try {
-                apache.rocketmq.v2.Message message = request.getMessages(0);
                 String shardingKey = null;
+                // 只有一条消息时，选择会选择消息组，作为分片键，多个时，不会？
                 if (request.getMessagesCount() == 1) {
-                    shardingKey = message.getSystemProperties().getMessageGroup();
+                    shardingKey = request.getMessages(0).getSystemProperties().getMessageGroup();
                 }
                 AddressableMessageQueue targetMessageQueue;
                 if (StringUtils.isNotEmpty(shardingKey)) {
-                    // With shardingKey
+                    // With shardingKey 基于key的code 通过一致性hash，避免hash底数变化。
                     List<AddressableMessageQueue> writeQueues = messageQueueView.getWriteSelector().getQueues();
                     int bucket = Hashing.consistentHash(shardingKey.hashCode(), writeQueues.size());
                     targetMessageQueue = writeQueues.get(bucket);

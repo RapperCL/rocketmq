@@ -63,9 +63,10 @@ public class ProducerProcessor extends AbstractProcessor {
         this.topicMessageTypeValidator = new DefaultTopicMessageTypeValidator();
     }
 
-    public CompletableFuture<List<SendResult>> sendMessage(ProxyContext ctx, QueueSelector queueSelector,
+    // todo 为什么要这样设计，将QueueSelector作为参数？
+    public CompletableFuture<SendResult> sendMessage(ProxyContext ctx, QueueSelector queueSelector,
         String producerGroup, int sysFlag, List<Message> messageList, long timeoutMillis) {
-        CompletableFuture<List<SendResult>> future = new CompletableFuture<>();
+        CompletableFuture<SendResult> future = new CompletableFuture<>();
         try {
             Message message = messageList.get(0);
             String topic = message.getTopic();
@@ -97,16 +98,14 @@ public class ProducerProcessor extends AbstractProcessor {
                 messageList,
                 requestHeader,
                 timeoutMillis)
-                .thenApplyAsync(sendResultList -> {
-                    for (SendResult sendResult : sendResultList) {
-                        int tranType = MessageSysFlag.getTransactionValue(requestHeader.getSysFlag());
-                        if (SendStatus.SEND_OK.equals(sendResult.getSendStatus()) &&
+                .thenApplyAsync(sendResult  -> {
+                    int tranType = MessageSysFlag.getTransactionValue(requestHeader.getSysFlag());
+                    if (SendStatus.SEND_OK.equals(sendResult.getSendStatus()) &&
                             tranType == MessageSysFlag.TRANSACTION_PREPARED_TYPE &&
                             StringUtils.isNotBlank(sendResult.getTransactionId())) {
-                            fillTransactionData(ctx, producerGroup, messageQueue, sendResult, messageList);
-                        }
+                        fillTransactionData(ctx, producerGroup, messageQueue, sendResult, messageList);
                     }
-                    return sendResultList;
+                    return sendResult;
                 }, this.executor);
         } catch (Throwable t) {
             future.completeExceptionally(t);

@@ -198,8 +198,7 @@ public class SendMessageActivityTest extends BaseActivityTest {
                         .build())
                     .setBody(ByteString.copyFromUtf8("123"))
                     .build()
-            ),
-            Resource.newBuilder().setName(TOPIC).build());
+            ));
     }
 
     @Test
@@ -225,8 +224,7 @@ public class SendMessageActivityTest extends BaseActivityTest {
                         .build())
                     .setBody(ByteString.copyFromUtf8("123"))
                     .build()
-            ),
-            Resource.newBuilder().setName(TOPIC).build()).get(0);
+            )).get(0);
 
         assertEquals(MessageClientIDSetter.getUniqID(messageExt), msgId);
         assertEquals(deliveryTime, Long.parseLong(messageExt.getProperty(MessageConst.PROPERTY_TIMER_DELIVER_MS)));
@@ -254,8 +252,7 @@ public class SendMessageActivityTest extends BaseActivityTest {
         org.apache.rocketmq.common.message.Message messageExt = this.sendMessageActivity.buildMessage(null,
             Lists.newArrayList(
                 message
-            ),
-            Resource.newBuilder().setName(TOPIC).build()).get(0);
+            )).get(0);
 
         assertEquals(MessageClientIDSetter.getUniqID(messageExt), msgId);
         assertEquals(MessageSysFlag.TRANSACTION_PREPARED_TYPE | MessageSysFlag.COMPRESSED_FLAG, sendMessageActivity.buildSysFlag(message));

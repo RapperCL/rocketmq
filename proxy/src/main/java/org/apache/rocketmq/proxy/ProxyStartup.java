@@ -89,7 +89,7 @@ public class ProxyStartup {
                 .build();
             // 0811 都在一个线程中完成，要不要指定优先级呢？ 按理来说，grpcServer需要优先关闭。
             PROXY_START_AND_SHUTDOWN.appendStartAndShutdown(grpcServer);
-            // 同时支持grpc以及remoting协议
+            // 同时支持grpc以及remoting协议 grpc 用于对接客户端， remote对接broker以及namesrv
             RemotingProtocolServer remotingServer = new RemotingProtocolServer(messagingProcessor, accessValidators);
             PROXY_START_AND_SHUTDOWN.appendStartAndShutdown(remotingServer);
 
@@ -183,6 +183,7 @@ public class ProxyStartup {
 
         if (ProxyMode.isClusterMode(proxyModeStr)) {
             messagingProcessor = DefaultMessagingProcessor.createForClusterMode();
+            // proxy 指标管理器
             ProxyMetricsManager proxyMetricsManager = ProxyMetricsManager.initClusterMode(ConfigurationManager.getProxyConfig());
             PROXY_START_AND_SHUTDOWN.appendStartAndShutdown(proxyMetricsManager);
         } else if (ProxyMode.isLocalMode(proxyModeStr)) {

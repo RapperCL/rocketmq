@@ -116,7 +116,7 @@ public class DefaultMessagingProcessor extends AbstractStartAndShutdown implemen
         }
         return createForClusterMode(rpcHook);
     }
-
+    // RPCHook 这种方式说实话，很low
     public static DefaultMessagingProcessor createForClusterMode(RPCHook rpcHook) {
         return new DefaultMessagingProcessor(ServiceManagerFactory.createForClusterMode(rpcHook));
     }
@@ -139,7 +139,7 @@ public class DefaultMessagingProcessor extends AbstractStartAndShutdown implemen
     }
 
     @Override
-    public CompletableFuture<List<SendResult>> sendMessage(ProxyContext ctx, QueueSelector queueSelector,
+    public CompletableFuture<SendResult> sendMessage(ProxyContext ctx, QueueSelector queueSelector,
         String producerGroup, int sysFlag, List<Message> msg, long timeoutMillis) {
         return this.producerProcessor.sendMessage(ctx, queueSelector, producerGroup, sysFlag, msg, timeoutMillis);
     }

@@ -1265,6 +1265,7 @@ public class CommitLog implements Swappable {
         int mappedFileSize = this.defaultMessageStore.getMessageStoreConfig().getMappedFileSizeCommitLog();
         MappedFile mappedFile = this.mappedFileQueue.findMappedFileByOffset(offset, offset == 0);
         if (mappedFile != null) {
+            // 逻辑位移
             int pos = (int) (offset % mappedFileSize);
             SelectMappedBufferResult selectMappedBufferResult = mappedFile.selectMappedBuffer(pos, size);
             if (null != selectMappedBufferResult) {

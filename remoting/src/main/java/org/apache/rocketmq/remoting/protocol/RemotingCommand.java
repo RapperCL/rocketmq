@@ -211,11 +211,11 @@ public class RemotingCommand {
         SerializeType type) throws RemotingCommandException {
         switch (type) {
             case JSON:
-                byte[] headerData = new byte[len];
-                byteBuffer.readBytes(headerData);
-                RemotingCommand resultJson = RemotingSerializable.decode(headerData, RemotingCommand.class);
-                resultJson.setSerializeTypeCurrentRPC(type);
-                return resultJson;
+//                byte[] headerData = new byte[len];
+//                byteBuffer.readBytes(headerData);
+//                RemotingCommand resultJson = RemotingSerializable.decode(headerData, RemotingCommand.class);
+//                resultJson.setSerializeTypeCurrentRPC(type);
+//                return resultJson;
             case ROCKETMQ:
                 RemotingCommand resultRMQ = RocketMQSerializable.rocketMQProtocolDecode(byteBuffer, len);
                 resultRMQ.setSerializeTypeCurrentRPC(type);

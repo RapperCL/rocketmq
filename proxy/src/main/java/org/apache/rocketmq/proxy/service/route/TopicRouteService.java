@@ -73,7 +73,7 @@ public abstract class TopicRouteService extends AbstractStartAndShutdown {
             executor(cacheRefreshExecutor).build(new CacheLoader<String, MessageQueueView>() {
                 @Override public @Nullable MessageQueueView load(String topic) throws Exception {
                     try {
-                        // 从namesrv获取所有的主题路由信息
+                        // 从namesrv获取所有的主题路由信息，20s更新一次
                         TopicRouteData topicRouteData = mqClientAPIFactory.getClient().getTopicRouteInfoFromNameServer(topic, Duration.ofSeconds(3).toMillis());
                         return buildMessageQueueView(topic, topicRouteData);
                     } catch (Exception e) {

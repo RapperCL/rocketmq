@@ -112,6 +112,7 @@ public class GrpcMessagingApplication extends MessagingServiceGrpc.MessagingServ
             "GrpcClientManagerThreadPool",
             config.getGrpcClientManagerThreadQueueCapacity()
         );
+        // 为什么不直接在创建时，支持拒绝策略呢？
         this.transactionThreadPoolExecutor = ThreadPoolMonitor.createAndMonitor(
             config.getGrpcTransactionThreadPoolNums(),
             config.getGrpcTransactionThreadPoolNums(),
@@ -120,7 +121,7 @@ public class GrpcMessagingApplication extends MessagingServiceGrpc.MessagingServ
             "GrpcTransactionThreadPool",
             config.getGrpcTransactionThreadQueueCapacity()
         );
-
+        // 减少多余的init
         this.init();
     }
 
@@ -234,6 +235,7 @@ public class GrpcMessagingApplication extends MessagingServiceGrpc.MessagingServ
         ProxyContext context = createContext();
         try {
             validateContext(context);
+            // todo 命名不恰当
             this.addExecutor(this.producerThreadPoolExecutor,
                 context,
                 request,

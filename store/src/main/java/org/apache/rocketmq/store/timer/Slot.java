@@ -24,6 +24,10 @@ package org.apache.rocketmq.store.timer;
  * │   8bytes   │   8bytes  │  8bytes   │   4bytes  │   4bytes  │
  * └────────────┴───────────┴───────────┴───────────┴───────────┘
  */
+
+/**
+ * todo 考虑能不能 针对频繁更新的字段，解决伪共享问题
+ */
 public class Slot {
     public static final short SIZE = 32;
     public final long timeMs; //delayed time

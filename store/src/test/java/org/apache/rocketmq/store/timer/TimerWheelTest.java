@@ -27,8 +27,9 @@ import static org.junit.Assert.assertEquals;
 public class TimerWheelTest {
 
     private String baseDir;
-
+    // 时间轮格口
     private final int slotsTotal = 30;
+    // 每个格口的时间
     private final int precisionMs = 500;
     private TimerWheel timerWheel;
 
@@ -49,6 +50,7 @@ public class TimerWheelTest {
         assertEquals(-1, first.firstPos);
         assertEquals(-1, first.lastPos);
 
+        // 主要是保留消息的相关元数据，后面可以通过这些元数据找到消息
         timerWheel.putSlot(delayedTime, 1, 2, 3, 4);
         Slot second = timerWheel.getSlot(delayedTime);
         assertEquals(delayedTime, second.timeMs);
