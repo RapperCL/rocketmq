@@ -84,7 +84,7 @@ public class ProducerProcessorTest extends BaseProcessorTest {
         sendResult.setQueueOffset(queueOffset);
         ArgumentCaptor<SendMessageRequestHeader> requestHeaderArgumentCaptor = ArgumentCaptor.forClass(SendMessageRequestHeader.class);
         when(this.messageService.sendMessage(any(), any(), any(), requestHeaderArgumentCaptor.capture(), anyLong()))
-            .thenReturn(CompletableFuture.completedFuture(Lists.newArrayList(sendResult)));
+            .thenReturn(CompletableFuture.completedFuture(sendResult));
 
         List<Message> messageList = new ArrayList<>();
         Message messageExt = createMessageExt(TOPIC, "tag", 0, 0);
@@ -103,7 +103,7 @@ public class ProducerProcessorTest extends BaseProcessorTest {
             commitLogOffsetCaptor.capture(),
             anyString(), any())).thenReturn(mock(TransactionData.class));
 
-        List<SendResult> sendResultList = this.producerProcessor.sendMessage(
+         SendResult  sendResultList = this.producerProcessor.sendMessage(
             createContext(),
             (ctx, messageQueueView) -> messageQueue,
             PRODUCER_GROUP,
@@ -137,7 +137,7 @@ public class ProducerProcessorTest extends BaseProcessorTest {
         sendResult.setQueueOffset(queueOffset);
         ArgumentCaptor<SendMessageRequestHeader> requestHeaderArgumentCaptor = ArgumentCaptor.forClass(SendMessageRequestHeader.class);
         when(this.messageService.sendMessage(any(), any(), any(), requestHeaderArgumentCaptor.capture(), anyLong()))
-            .thenReturn(CompletableFuture.completedFuture(Lists.newArrayList(sendResult)));
+            .thenReturn(CompletableFuture.completedFuture(sendResult));
 
         List<Message> messageExtList = new ArrayList<>();
         Message messageExt = createMessageExt(MixAll.getRetryTopic(CONSUMER_GROUP), "tag", 0, 0);
@@ -158,7 +158,7 @@ public class ProducerProcessorTest extends BaseProcessorTest {
             commitLogOffsetCaptor.capture(),
             anyString(), any())).thenReturn(mock(TransactionData.class));
 
-        List<SendResult> sendResultList = this.producerProcessor.sendMessage(
+        SendResult sendResultList = this.producerProcessor.sendMessage(
             createContext(),
             (ctx, messageQueueView) -> messageQueue,
             PRODUCER_GROUP,

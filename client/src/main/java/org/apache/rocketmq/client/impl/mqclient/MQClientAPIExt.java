@@ -197,6 +197,37 @@ public class MQClientAPIExt extends MQClientAPIImpl {
         return future;
     }
 
+    public CompletableFuture<SendResult> sendMessageAsyncs(
+            String brokerAddr,
+            String brokerName,
+            Message msg,
+            SendMessageRequestHeader requestHeader,
+            long timeoutMillis
+    ) {
+        SendMessageRequestHeaderV2 requestHeaderV2 = SendMessageRequestHeaderV2.createSendMessageRequestHeaderV2(requestHeader);
+        RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.SEND_MESSAGE_V2, requestHeaderV2);
+        request.setBody(msg.getBody());
+
+        CompletableFuture<SendResult> future = new CompletableFuture<>();
+        try {
+            this.getRemotingClient().invokeAsync(brokerAddr, request, timeoutMillis, responseFuture -> {
+                RemotingCommand response = responseFuture.getResponseCommand();
+                if (response != null) {
+                    try {
+                        future.complete(this.processSendResponse(brokerName, msg, response, brokerAddr));
+                    } catch (Exception e) {
+                        future.completeExceptionally(e);
+                    }
+                } else {
+                    future.completeExceptionally(processNullResponseErr(responseFuture));
+                }
+            });
+        } catch (Throwable t) {
+            future.completeExceptionally(t);
+        }
+        return future;
+    }
+
     public CompletableFuture<SendResult> sendMessageAsync(
         String brokerAddr,
         String brokerName,
@@ -216,6 +247,7 @@ public class MQClientAPIExt extends MQClientAPIImpl {
             msgBatch.setBody(body);
 
             request.setBody(body);
+            // todo 调用remotingClient进行发送
             this.getRemotingClient().invokeAsync(brokerAddr, request, timeoutMillis, responseFuture -> {
                 RemotingCommand response = responseFuture.getResponseCommand();
                 if (response != null) {

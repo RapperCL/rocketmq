@@ -26,6 +26,8 @@ import org.apache.rocketmq.client.consumer.PullResult;
 import org.apache.rocketmq.client.producer.SendResult;
 import org.apache.rocketmq.common.consumer.ReceiptHandle;
 import org.apache.rocketmq.common.message.Message;
+import org.apache.rocketmq.common.message.MessageBatch;
+import org.apache.rocketmq.common.message.MessageClientIDSetter;
 import org.apache.rocketmq.common.message.MessageQueue;
 import org.apache.rocketmq.proxy.common.ProxyContext;
 import org.apache.rocketmq.proxy.common.ProxyException;
@@ -59,22 +61,23 @@ public class ClusterMessageService implements MessageService {
     }
 
     @Override
-    public CompletableFuture<List<SendResult>> sendMessage(ProxyContext ctx, AddressableMessageQueue messageQueue,
+    public CompletableFuture<SendResult> sendMessage(ProxyContext ctx, AddressableMessageQueue messageQueue,
         List<Message> msgList, SendMessageRequestHeader requestHeader, long timeoutMillis) {
-        CompletableFuture<List<SendResult>> future;
-        // 为什么要加这个判断？ 一个是单条，一个走批量
-        if (msgList.size() == 1) {
-            future = this.mqClientAPIFactory.getClient().sendMessageAsync(
-                    messageQueue.getBrokerAddr(),
-                    messageQueue.getBrokerName(), msgList.get(0), requestHeader, timeoutMillis)
-                .thenApply(Lists::newArrayList);
-        } else {
-            // 应该将批量的处理逻辑加到这里，保持一致
-            future = this.mqClientAPIFactory.getClient().sendMessageAsync(
-                    messageQueue.getBrokerAddr(),
-                    messageQueue.getBrokerName(), msgList, requestHeader, timeoutMillis)
-                .thenApply(Lists::newArrayList);
+
+        Message message;
+        // 消息转换为批量消息
+        if(requestHeader.isBatch()){
+            message = MessageBatch.generateFromList(msgList);
+            MessageClientIDSetter.setUniqID(message);
+            ((MessageBatch) message).fillBody();
+        }else{
+            message = msgList.get(0);
         }
+
+        CompletableFuture<SendResult> future = this.mqClientAPIFactory.getClient().sendMessageAsync(
+                messageQueue.getBrokerAddr(),
+                messageQueue.getBrokerName(), message, requestHeader, timeoutMillis);
+
         return future;
     }
 
