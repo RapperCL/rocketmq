@@ -272,8 +272,10 @@ public class TieredFlatFile {
                 this.updateFileSegment(segment);
             }
         } catch (Exception e) {
+            // 异常之后，不应该吞掉异常，应该往上抛出异常，否则创建segment失败的异常会被吞掉
             logger.error("create file segment failed: filePath:{}, file type: {}, base offset: {}",
                 filePath, fileType, baseOffset, e);
+            throw e;
         }
         return segment;
     }

@@ -238,6 +238,9 @@ public class QueryAssignmentProcessor implements NettyRequestProcessor {
         int popShareQueueNum) {
 
         List<MessageQueue> allocateResult;
+        /**
+         * 队列共享数量>= cid 时，代表每个队列可以被当前所有的消费者共享
+         */
         if (popShareQueueNum <= 0 || popShareQueueNum >= cidAll.size() - 1) {
             //each client pop all messagequeue
             allocateResult = new ArrayList<>(mqAll.size());
@@ -248,6 +251,7 @@ public class QueryAssignmentProcessor implements NettyRequestProcessor {
             }
 
         } else {
+            // 否则的话，就进行多次轮询分配，实现一个队列被多个消费者重复消费。
             if (cidAll.size() <= mqAll.size()) {
                 //consumer working in pop mode could share the MessageQueues assigned to the N (N = popWorkGroupSize) consumer following it in the cid list
                 allocateResult = allocateMessageQueueStrategy.allocate(consumerGroup, clientId, mqAll, cidAll);

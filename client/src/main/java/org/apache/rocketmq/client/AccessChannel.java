@@ -29,5 +29,5 @@ public enum AccessChannel {
     /**
      * Means connect to Cloud service.
      */
-    CLOUD,
+    CLOUD
 }

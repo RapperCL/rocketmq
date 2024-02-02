@@ -109,9 +109,10 @@ public class AckMessageProcessor implements NettyRequestProcessor {
     private RemotingCommand processRequest(final Channel channel, RemotingCommand request,
                                            boolean brokerAllowSuspend) throws RemotingCommandException {
         AckMessageRequestHeader requestHeader;
-        BatchAckMessageRequestBody reqBody = null;
+
         final RemotingCommand response = RemotingCommand.createResponseCommand(ResponseCode.SUCCESS, null);
         response.setOpaque(request.getOpaque());
+        // 消费者发回ack消息，更新消息消费位移？ checkPoint与消费位移的联系
         if (request.getCode() == RequestCode.ACK_MESSAGE) {
             requestHeader = (AckMessageRequestHeader) request.decodeCommandCustomHeader(AckMessageRequestHeader.class);
 
@@ -145,6 +146,7 @@ public class AckMessageProcessor implements NettyRequestProcessor {
 
             appendAck(requestHeader, null, response, channel, null);
         } else if (request.getCode() == RequestCode.BATCH_ACK_MESSAGE) {
+            BatchAckMessageRequestBody reqBody = null;
             if (request.getBody() != null) {
                 reqBody = BatchAckMessageRequestBody.decode(request.getBody(), BatchAckMessageRequestBody.class);
             }
@@ -167,8 +169,11 @@ public class AckMessageProcessor implements NettyRequestProcessor {
     private void appendAck(final AckMessageRequestHeader requestHeader, final BatchAck batchAck, final RemotingCommand response, final Channel channel, String brokerName) {
         String[] extraInfo;
         String consumeGroup, topic;
+        // 消费队列id， 重试消费队列id
         int qId, rqId;
+        // 起始位移， ack位移
         long startOffset, ackOffset;
+        // pop拉取时间，不可见时间
         long popTime, invisibleTime;
         AckMsg ackMsg;
         int ackCount = 0;
@@ -244,20 +249,27 @@ public class AckMessageProcessor implements NettyRequestProcessor {
 
             long minOffset = this.brokerController.getMessageStore().getMinOffsetInQueue(topic, qId);
             long maxOffset = this.brokerController.getMessageStore().getMaxOffsetInQueue(topic, qId);
-            if (minOffset == -1 || maxOffset == -1) {
+            // maxOffset 不存在为-1的情况，ack消息，那么一定是有值的
+            if (minOffset == -1 || maxOffset == 0) {
                 POP_LOGGER.error("Illegal topic or queue found when batch ack {}", batchAck);
                 return;
             }
 
             BatchAckMsg batchAckMsg = new BatchAckMsg();
             for (int i = 0; batchAck.getBitSet() != null && i < batchAck.getBitSet().length(); i++) {
+                //
                 if (!batchAck.getBitSet().get(i)) {
                     continue;
-                }
+                }// todo 1125 为什么offset一定是连续的？ 如果是这样的话，那么这里的batchAckMsg，同样可以压缩内存，
+                //todo 1125 没必要采用long集合存储， 就可以压缩内存了
+                // 差异肯定是小于int的， 如果差异大的话，bitset就占很大内存了。
                 long offset = startOffset + i;
                 if (offset < minOffset || offset > maxOffset) {
                     continue;
                 }
+                // 或者batchAckMsg 也不需要解析出真正的offset。
+                // 解析出来之后，也没有干啥
+                batchAckMsg.getAckOffsetLists().add(9);
                 batchAckMsg.getAckOffsetList().add(offset);
             }
             if (batchAckMsg.getAckOffsetList().isEmpty()) {
@@ -274,16 +286,20 @@ public class AckMessageProcessor implements NettyRequestProcessor {
         ackMsg.setConsumerGroup(consumeGroup);
         ackMsg.setTopic(topic);
         ackMsg.setQueueId(qId);
+        // todo ackMsg就是会包含startOffset ，为什么batchAckMsg需要使用List<long>类型记录
         ackMsg.setStartOffset(startOffset);
         ackMsg.setAckOffset(ackOffset);
         ackMsg.setPopTime(popTime);
         ackMsg.setBrokerName(brokerName);
-
+        // 先尝试放入内存匹配，可能失败，失败代表内存匹配未开始,或者ck已经写入到磁盘，buffer中已经被
+        // 删除了
         if (this.brokerController.getPopMessageProcessor().getPopBufferMergeService().addAk(rqId, ackMsg)) {
             brokerController.getPopInflightMessageCounter().decrementInFlightMessageNum(topic, consumeGroup, popTime, qId, ackCount);
             return;
         }
-
+        /**
+         * 内存中匹配失败，则构造ack消息，将ack消息存入磁盘
+         */
         MessageExtBrokerInner msgInner = new MessageExtBrokerInner();
         msgInner.setTopic(reviveTopic);
         msgInner.setBody(JSON.toJSONString(ackMsg).getBytes(DataConverter.charset));
@@ -298,6 +314,7 @@ public class AckMessageProcessor implements NettyRequestProcessor {
         msgInner.setBornTimestamp(System.currentTimeMillis());
         msgInner.setBornHost(this.brokerController.getStoreHost());
         msgInner.setStoreHost(this.brokerController.getStoreHost());
+        // ack消息的下次投递时间，其实就是不可见时间，和对应ck消息的时间一致。
         msgInner.setDeliverTimeMs(popTime + invisibleTime);
         msgInner.getProperties().put(MessageConst.PROPERTY_UNIQ_CLIENT_MESSAGE_ID_KEYIDX, PopMessageProcessor.genAckUniqueId(ackMsg));
         msgInner.setPropertiesString(MessageDecoder.messageProperties2String(msgInner.getProperties()));

@@ -121,6 +121,8 @@ public class PosixFileSegment extends TieredFileSegment {
                         this.writeFileChannel = new RandomAccessFile(file, "rwd").getChannel();
                         this.file = file;
                     } catch (Exception e) {
+                        // 异常之后，应该要考虑readFileChannel和writeFileChannel的关闭
+                        destroyFile();
                         logger.error("PosixFileSegment#createFile: create file {} failed: ", filePath, e);
                     }
                 }
@@ -128,6 +130,9 @@ public class PosixFileSegment extends TieredFileSegment {
         }
     }
 
+    /**
+     * 应该考虑io关闭异常场景，并将channel进行关闭
+     */
     @Override
     public void destroyFile() {
         try {

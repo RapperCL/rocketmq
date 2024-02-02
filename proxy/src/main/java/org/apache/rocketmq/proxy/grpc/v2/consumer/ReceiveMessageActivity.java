@@ -56,6 +56,7 @@ public class ReceiveMessageActivity extends AbstractMessingActivity {
 
     public void receiveMessage(ProxyContext ctx, ReceiveMessageRequest request,
         StreamObserver<ReceiveMessageResponse> responseObserver) {
+        // 构建处理之后，写回的操作
         ReceiveMessageResponseStreamWriter writer = createWriter(ctx, responseObserver);
 
         try {
@@ -116,6 +117,7 @@ public class ReceiveMessageActivity extends AbstractMessingActivity {
                 return;
             }
 
+            // 交给msgProcessor获取消息，获取之后，交给msgService
             this.messagingProcessor.popMessage(
                     ctx,
                     new ReceiveMessageQueueSelector(
@@ -133,6 +135,7 @@ public class ReceiveMessageActivity extends AbstractMessingActivity {
                     request.hasAttemptId() ? request.getAttemptId() : null,
                     timeRemaining
                 ).thenAccept(popResult -> {
+                    // todo 消息已经过滤了
                     if (proxyConfig.isEnableProxyAutoRenew() && request.getAutoRenew()) {
                         if (PopStatus.FOUND.equals(popResult.getPopStatus())) {
                             List<MessageExt> messageExtList = popResult.getMsgFoundList();
@@ -147,6 +150,7 @@ public class ReceiveMessageActivity extends AbstractMessingActivity {
                             }
                         }
                     }
+                    // 写回消息
                     writer.writeAndComplete(ctx, request, popResult);
                 })
                 .exceptionally(t -> {

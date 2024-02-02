@@ -25,9 +25,18 @@ public class BatchAckMsg extends AckMsg {
     @JSONField(name = "aol", alternateNames = {"ackOffsetList"})
     private List<Long> ackOffsetList = new ArrayList(32);
 
-
+    private List<Integer> ackOffsetLists = new ArrayList<>(32);
+    // 保持和ackMsg一样呗
     public List<Long> getAckOffsetList() {
         return ackOffsetList;
+    }
+
+    public List<Integer> getAckOffsetLists(){
+        return ackOffsetLists;
+    }
+    
+    public void setAckOffsetLists(List<Integer> ackOffsetLists){
+        this.ackOffsetLists = ackOffsetLists;
     }
 
     public void setAckOffsetList(List<Long> ackOffsetList) {

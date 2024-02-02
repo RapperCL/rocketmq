@@ -167,6 +167,7 @@ public class PopBufferMergeService extends ServiceThread {
         return count;
     }
 
+    // 通过LinkedBlockingDeque管理checkPoint位移，
     public long getLatestOffset(String lockKey) {
         QueueWithTime<PopCheckPointWrapper> queue = this.commitOffsets.get(lockKey);
         if (queue == null) {
@@ -223,6 +224,7 @@ public class PopBufferMergeService extends ServiceThread {
             PopCheckPointWrapper pointWrapper = entry.getValue();
 
             // just process offset(already stored at pull thread), or buffer ck(not stored and ack finish)
+            // checkPoint已经在磁盘中，或全部消息匹配成功，则从内存中移除
             if (pointWrapper.isJustOffset() && pointWrapper.isCkStored() || isCkDone(pointWrapper)
                 || isCkDoneForFinish(pointWrapper) && pointWrapper.isCkStored()) {
                 if (brokerController.getBrokerConfig().isEnablePopLog()) {
@@ -242,7 +244,7 @@ public class PopBufferMergeService extends ServiceThread {
                 removeCk = true;
             }
 
-            // the time stayed is too long
+            // the time stayed is too long  在buffer中，待到超过了3s，则进行remove，放入到store中
             if (now - point.getPopTime() > brokerController.getBrokerConfig().getPopCkStayBufferTime()) {
                 removeCk = true;
             }
@@ -262,7 +264,7 @@ public class PopBufferMergeService extends ServiceThread {
                 }
                 continue;
             } else if (removeCk) {
-                // put buffer ak to store
+                // put buffer ak to store 将checkPoint包装成消息，放入磁盘，并从内存中移除。
                 if (pointWrapper.getReviveQueueOffset() < 0) {
                     putCkToStore(pointWrapper, false);
                     countCk++;
@@ -272,26 +274,42 @@ public class PopBufferMergeService extends ServiceThread {
                     continue;
                 }
 
+                // 移除CheckPoint之前，将checkPoint中已经ack了的消息，也放入磁盘。
+                // 批量消息中，存在部分ak，部分没有ack的，此时是将已经ack的消息但是还未更新到磁盘的消息，更新到磁盘去，
+                // 下一次会再次取出来，
                 if (brokerController.getBrokerConfig().isEnablePopBatchAck()) {
-                    List<Byte> indexList = this.batchAckIndexList;
+                    //List<Byte> indexList = this.batchAckIndexList;
+                    int bits;
                     try {
+                        // ack了，但是未toStore
+                        bits = pointWrapper.getBits().get() ^ pointWrapper.getToStoreBits().get();
+                        
                         for (byte i = 0; i < point.getNum(); i++) {
-                            // reput buffer ak to store
+                            // reput buffer ak to store,
                             if (DataConverter.getBit(pointWrapper.getBits().get(), i)
                                     && !DataConverter.getBit(pointWrapper.getToStoreBits().get(), i)) {
-                                indexList.add(i);
+                                //indexList.add(i);
                             }
                         }
-                        if (indexList.size() > 0) {
-                            if (putBatchAckToStore(pointWrapper, indexList)) {
-                                count += indexList.size();
-                                for (Byte i : indexList) {
-                                    markBitCAS(pointWrapper.getToStoreBits(), i);
-                                }
+                        if(bits != 0){
+                            if(putBatchAckToStore(pointWrapper, bits)) {
+                               count += Integer.bitCount(bits);
+                               pointWrapper.getToStoreBits().set(pointWrapper.getToStoreBits().get() | bits);
                             }
                         }
+//                        if (indexList.size() > 0) {
+//                            // batchAck中存在部分未被ack的，更新ackOffset列表之后，重新将该消息投递到revive Topic中
+//                            // 下面的方法会对offset进行过滤
+//                            if (putBatchAckToStore(pointWrapper, bits)) {
+//                                count += indexList.size();
+//                                // 一个一个更新，效率有点低下呀  当前的进行与计算即可。
+//                                for (Byte i : indexList) {
+//                                    markBitCAS(pointWrapper.getToStoreBits(), i);
+//                                }
+//                            }
+//                        }
                     } finally {
-                        indexList.clear();
+                        //indexList.clear();
                     }
                 } else {
                     for (byte i = 0; i < point.getNum(); i++) {
@@ -305,7 +323,8 @@ public class PopBufferMergeService extends ServiceThread {
                         }
                     }
                 }
-
+                // 已经ack完成了的，会从buffer中移除。
+                // 为什么再次写入到磁盘，是为了下次重试吗
                 if (isCkDoneForFinish(pointWrapper) && pointWrapper.isCkStored()) {
                     if (brokerController.getBrokerConfig().isEnablePopLog()) {
                         POP_LOGGER.info("[PopBuffer]ck finish, {}", pointWrapper);
@@ -316,6 +335,7 @@ public class PopBufferMergeService extends ServiceThread {
                 }
             }
         }
+
 
         int offsetBufferSize = scanCommitOffset();
 
@@ -391,6 +411,7 @@ public class PopBufferMergeService extends ServiceThread {
                 // maybe store offset is not correct.
                 POP_LOGGER.warn("Commit offset, consumer offset less than store, {}, {}", wrapper, offset);
             }
+            // 提交主题，队列，group的消费位移
             brokerController.getConsumerOffsetManager().commitOffset(getServiceName(),
                 popCheckPoint.getCId(), popCheckPoint.getTopic(), popCheckPoint.getQueueId(), wrapper.getNextBeginOffset());
         } finally {
@@ -488,7 +509,7 @@ public class PopBufferMergeService extends ServiceThread {
             }
             return false;
         }
-
+        // buffer的容量达到了最大值时，此时不会继续往buffer中存放，而是放入到磁盘中
         if (this.counter.get() > brokerController.getBrokerConfig().getPopCkMaxBufferSize()) {
             POP_LOGGER.warn("[PopBuffer]add ck, max size, {}, {}", point, this.counter.get());
             return false;
@@ -517,6 +538,7 @@ public class PopBufferMergeService extends ServiceThread {
     }
 
     public boolean addAk(int reviveQid, AckMsg ackMsg) {
+        // 内存匹配未开启，则直接返回
         if (!brokerController.getBrokerConfig().isEnablePopBufferMerge()) {
             return false;
         }
@@ -524,6 +546,7 @@ public class PopBufferMergeService extends ServiceThread {
             return false;
         }
         try {
+            //todo 根据ack消息从内存中找到对应的checkPoint, ---将popTime也作为了参数之一，这是为了保证唯一性，其实可以加上id？也不行，最好是通过雪花算法计算出唯一标识
             PopCheckPointWrapper pointWrapper = this.buffer.get(ackMsg.getTopic() + ackMsg.getConsumerGroup() + ackMsg.getQueueId() + ackMsg.getStartOffset() + ackMsg.getPopTime() + ackMsg.getBrokerName());
             if (pointWrapper == null) {
                 if (brokerController.getBrokerConfig().isEnablePopLog()) {
@@ -531,21 +554,21 @@ public class PopBufferMergeService extends ServiceThread {
                 }
                 return false;
             }
-
+            // 内存中仅保存offset，实际已经保存到磁盘，内存中不处理ack消息的匹配，直接返回
             if (pointWrapper.isJustOffset()) {
                 return false;
             }
 
             PopCheckPoint point = pointWrapper.getCk();
             long now = System.currentTimeMillis();
-
+            // now > reviveTime +timeOut 超时了
             if (point.getReviveTime() - now < brokerController.getBrokerConfig().getPopCkStayBufferTimeOut() + 1500) {
                 if (brokerController.getBrokerConfig().isEnablePopLog()) {
                     POP_LOGGER.warn("[PopBuffer]add ack fail, rqId={}, almost timeout for revive, {}, {}, {}", reviveQid, pointWrapper, ackMsg, now);
                 }
                 return false;
             }
-
+            // cp在内存中待的时间过长
             if (now - point.getPopTime() > brokerController.getBrokerConfig().getPopCkStayBufferTime() - 1500) {
                 if (brokerController.getBrokerConfig().isEnablePopLog()) {
                     POP_LOGGER.warn("[PopBuffer]add ack fail, rqId={}, stay too long, {}, {}, {}", reviveQid, pointWrapper, ackMsg, now);
@@ -554,9 +577,12 @@ public class PopBufferMergeService extends ServiceThread {
             }
 
             if (ackMsg instanceof BatchAckMsg) {
+                //  todo 1205 难道仅仅是为了匹配方便一点？
                 for (Long ackOffset : ((BatchAckMsg) ackMsg).getAckOffsetList()) {
+                    // 基于offset找到是第几条消息的ackOffset，并将对应的下标更新为1
                     int indexOfAck = point.indexOfAck(ackOffset);
                     if (indexOfAck > -1) {
+                        // 设置checkPoint中被ack消息的bit码表为1, 但是int也只有4字节，一共32位，那其实就刚好了
                         markBitCAS(pointWrapper.getBits(), indexOfAck);
                     } else {
                         POP_LOGGER.error("[PopBuffer]Invalid index of ack, reviveQid={}, {}, {}", reviveQid, ackMsg, point);
@@ -659,13 +685,15 @@ public class PopBufferMergeService extends ServiceThread {
         return true;
     }
 
-    private boolean putBatchAckToStore(final PopCheckPointWrapper pointWrapper, final List<Byte> msgIndexList) {
+    private boolean putBatchAckToStore(final PopCheckPointWrapper pointWrapper, int bits) {
         PopCheckPoint point = pointWrapper.getCk();
         MessageExtBrokerInner msgInner = new MessageExtBrokerInner();
         final BatchAckMsg batchAckMsg = new BatchAckMsg();
 
-        for (Byte msgIndex : msgIndexList) {
-            batchAckMsg.getAckOffsetList().add(point.ackOffsetByIndex(msgIndex));
+        for(int i=0; i < pointWrapper.getCk().getNum(); i++){
+            if(DataConverter.getBit(bits, i)){
+                batchAckMsg.getAckOffsetList().add(point.ackOffsetByIndex((byte) i));
+            }
         }
         batchAckMsg.setStartOffset(point.getStartOffset());
         batchAckMsg.setConsumerGroup(point.getCId());

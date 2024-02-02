@@ -81,6 +81,8 @@ public class AckMsg {
         this.ackOffset = ackOffset;
     }
 
+    // 封装一个方法，获取唯一cp唯一id的
+
     public long getStartOffset() {
         return startOffset;
     }

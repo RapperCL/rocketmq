@@ -142,16 +142,19 @@ public class ConsumerProcessor extends AbstractProcessor {
                     messageQueue,
                     requestHeader,
                     timeoutMillis)
+                    // 获取到数据之后，接着执行
                 .thenApplyAsync(popResult -> {
                     if (PopStatus.FOUND.equals(popResult.getPopStatus()) &&
                         popResult.getMsgFoundList() != null &&
                         !popResult.getMsgFoundList().isEmpty() &&
                         popMessageResultFilter != null) {
+                        // 对消息进行过滤
 
                         List<MessageExt> messageExtList = new ArrayList<>();
                         for (MessageExt messageExt : popResult.getMsgFoundList()) {
                             try {
                                 fillUniqIDIfNeed(messageExt);
+                                // 为什么不把这个校验下沉, 不仅仅是校验
                                 String handleString = createHandle(messageExt.getProperty(MessageConst.PROPERTY_POP_CK), messageExt.getCommitLogOffset());
                                 if (handleString == null) {
                                     log.error("[BUG] pop message from broker but handle is empty. requestHeader:{}, msg:{}", requestHeader, messageExt);

@@ -304,6 +304,7 @@ public class TieredDispatcher extends ServiceThread implements CommitLogDispatch
 
                 // append commitlog will increase dispatch offset here
                 AppendResult result = flatFile.appendCommitLog(message.getByteBuffer(), true);
+                // 重新计算 offset（从commitlog调整为queue）
                 long newCommitLogOffset = flatFile.getCommitLogMaxOffset() - message.getByteBuffer().remaining();
                 doRedispatchRequestToWriteMap(
                     result, flatFile, dispatchOffset, newCommitLogOffset, size, tagCode, message.getByteBuffer());

@@ -42,6 +42,11 @@ public class ConsumerOffsetManager extends ConfigManager {
 
     private DataVersion dataVersion = new DataVersion();
 
+    /**
+     * broker端，通过map管理消费位移
+     * map<queueId, offset>
+     *    记录的数据量其实不大，每个消费者组有和 消费队列数量一样的记录。只需记录每个队列的消费进度
+     *    */
     private ConcurrentMap<String/* topic@group */, ConcurrentMap<Integer, Long>> offsetTable =
         new ConcurrentHashMap<>(512);
 

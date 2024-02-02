@@ -41,6 +41,14 @@ import static org.apache.rocketmq.broker.longpolling.PollingResult.POLLING_FULL;
 import static org.apache.rocketmq.broker.longpolling.PollingResult.POLLING_SUC;
 import static org.apache.rocketmq.broker.longpolling.PollingResult.POLLING_TIMEOUT;
 
+/**
+ * rocektmq的长轮询服务： 在请求未超时时，不立即返回对应的结果，而是进行重试。---- 放入到重试map中，run会轮询改map，重新执行对应的请求。
+ * 直到请求超时或获取到对应的结果之后，返回给客户端。
+ *
+ * 这种情况下，对于客户端采用同步方式时，会导致客户端阻塞。
+ *
+ * 在目标请求未获取到目标结果时，如果还未超时，则重新执行请求，直到该请求超时，或者获取到了对应的结果。
+ */
 public class PopLongPollingService extends ServiceThread {
     private static final Logger POP_LOGGER =
         LoggerFactory.getLogger(LoggerName.ROCKETMQ_POP_LOGGER_NAME);
@@ -80,6 +88,9 @@ public class PopLongPollingService extends ServiceThread {
                     continue;
                 }
                 long tmpTotalPollingNum = 0;
+                /**
+                 * 为什么使用跳跃表？ 因为对应集合的数据会频繁变动，也可以使用hashMap
+                 */
                 for (Map.Entry<String, ConcurrentSkipListSet<PopRequest>> entry : pollingMap.entrySet()) {
                     String key = entry.getKey();
                     ConcurrentSkipListSet<PopRequest> popQ = entry.getValue();
@@ -92,6 +103,7 @@ public class PopLongPollingService extends ServiceThread {
                         if (first == null) {
                             break;
                         }
+                        // 当前时间 > 长轮询时间，代表已经超时了，需要进行长轮询了。
                         if (!first.isTimeout()) {
                             if (popQ.add(first)) {
                                 break;
@@ -179,6 +191,11 @@ public class PopLongPollingService extends ServiceThread {
         return wakeUp(popRequest);
     }
 
+    /**
+     * 是否需要二次判断是否超时了，因为超时了的话客户端是不会继续等待了。
+     * @param request
+     * @return
+     */
     public boolean wakeUp(final PopRequest request) {
         if (request == null || !request.complete()) {
             return false;

@@ -168,6 +168,7 @@ public class PopCheckPoint implements Comparable<PopCheckPoint> {
             return startOffset + index;
         }
 
+
         return startOffset + queueOffsetDiff.get(index);
     }
 

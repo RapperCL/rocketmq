@@ -300,6 +300,7 @@ public class MQClientAPIExt extends MQClientAPIImpl {
             this.popMessageAsync(brokerName, brokerAddr, requestHeader, timeoutMillis, new PopCallback() {
                 @Override
                 public void onSuccess(PopResult popResult) {
+                    // 直接接收结果
                     future.complete(popResult);
                 }
 

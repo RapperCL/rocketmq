@@ -40,6 +40,7 @@ public class MessageQueueSelector {
     // multiple queues for brokers with queueId : normal
     private final List<AddressableMessageQueue> queues = new ArrayList<>();
     // one queue for brokers with queueId : -1
+    // 为什么不通过AddressableMessageQueue的属性作为判断条件呢？
     private final List<AddressableMessageQueue> brokerActingQueues = new ArrayList<>();
     private final Map<String, AddressableMessageQueue> brokerNameQueueMap = new ConcurrentHashMap<>();
     private final AtomicInteger queueIndex;

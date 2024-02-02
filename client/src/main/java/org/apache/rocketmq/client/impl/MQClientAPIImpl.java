@@ -909,8 +909,7 @@ public class MQClientAPIImpl implements NameServerUpdateCallback {
                 RemotingCommand response = responseFuture.getResponseCommand();
                 if (response != null) {
                     try {
-                        PopResult
-                            popResult = MQClientAPIImpl.this.processPopResponse(brokerName, response, requestHeader.getTopic(), requestHeader);
+                        PopResult popResult = MQClientAPIImpl.this.processPopResponse(brokerName, response, requestHeader.getTopic(), requestHeader);
                         assert popResult != null;
                         popCallback.onSuccess(popResult);
                     } catch (Exception e) {
@@ -1117,11 +1116,13 @@ public class MQClientAPIImpl implements NameServerUpdateCallback {
         if (popStatus != PopStatus.FOUND) {
             return popResult;
         }
+        // todo 从broker拉取到消息之后
         // it is a pop command if pop time greater than 0, we should set the check point info to extraInfo field
         Map<String, Long> startOffsetInfo = null;
         Map<String, List<Long>> msgOffsetInfo = null;
         Map<String, Integer> orderCountInfo = null;
         if (requestHeader instanceof PopMessageRequestHeader) {
+            // 设置不可见时间？
             popResult.setInvisibleTime(responseHeader.getInvisibleTime());
             popResult.setPopTime(responseHeader.getPopTime());
             startOffsetInfo = ExtraInfoUtil.parseStartOffsetInfo(responseHeader.getStartOffsetInfo());
@@ -1170,6 +1171,7 @@ public class MQClientAPIImpl implements NameServerUpdateCallback {
                         } else {
                             queueIdKey = ExtraInfoUtil.getStartOffsetInfoMapKey(messageExt.getTopic(), messageExt.getQueueId());
                             queueOffsetKey = ExtraInfoUtil.getQueueOffsetMapKey(messageExt.getTopic(), messageExt.getQueueId(), messageExt.getQueueOffset());
+                            // 获取当前消息offset在map中ArrayList的下标
                             index = sortMap.get(queueIdKey).indexOf(messageExt.getQueueOffset());
                             msgQueueOffset = msgOffsetInfo.get(queueIdKey).get(index);
                             if (msgQueueOffset != messageExt.getQueueOffset()) {
