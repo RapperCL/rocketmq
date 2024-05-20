@@ -43,7 +43,9 @@ public class GroupTransferService extends ServiceThread {
     private final PutMessageSpinLock lock = new PutMessageSpinLock();
     private final DefaultMessageStore defaultMessageStore;
     private final HAService haService;
+    // 看起来是，写请求缓冲区，使用linkedList？ 请求量特别大的时候，会导致内存溢出
     private volatile List<CommitLog.GroupCommitRequest> requestsWrite = new LinkedList<>();
+    // 看起来是，读请求缓冲区
     private volatile List<CommitLog.GroupCommitRequest> requestsRead = new LinkedList<>();
 
     public GroupTransferService(final HAService haService, final DefaultMessageStore defaultMessageStore) {
@@ -51,6 +53,10 @@ public class GroupTransferService extends ServiceThread {
         this.defaultMessageStore = defaultMessageStore;
     }
 
+    /**
+     * todo 设计这么鸡肋的吗？ 不考虑当前是否会超时*
+     * @param request
+     */
     public void putRequest(final CommitLog.GroupCommitRequest request) {
         lock.lock();
         try {

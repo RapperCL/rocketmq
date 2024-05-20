@@ -114,6 +114,7 @@ public class TimerWheel {
 
     public Slot getSlot(long timeMs) {
         Slot slot = getRawSlot(timeMs);
+        // slot.timeMs 代表当前slot的开始时间，startTime，那么下一个slot被扫描的时间就应该是 slot.timeMs + precisionMs
         if (slot.timeMs != timeMs / precisionMs * precisionMs) {
             return new Slot(-1, -1, -1);
         }
@@ -135,6 +136,7 @@ public class TimerWheel {
         localBuffer.get().position(getSlotIndex(timeMs) * Slot.SIZE);
         // To be compatible with previous version.
         // The previous version's precision is fixed at 1000ms and it store timeMs / 1000 in slot.
+        // 计算的是，在哪个格口
         localBuffer.get().putLong(timeMs / precisionMs);
         localBuffer.get().putLong(firstPos);
         localBuffer.get().putLong(lastPos);

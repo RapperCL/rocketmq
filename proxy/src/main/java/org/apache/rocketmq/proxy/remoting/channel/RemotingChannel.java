@@ -166,6 +166,7 @@ public class RemotingChannel extends ProxyChannel implements RemoteChannelConver
             return CompletableFuture.completedFuture(null);
         } catch (Throwable t) {
             responseFuture.completeExceptionally(t);
+            // 已完成的future，后面再有依赖时，会直接执行
             return FutureUtils.completeExceptionally(t);
         }
     }

@@ -243,6 +243,7 @@ public abstract class NettyRemotingAbstract {
      *
      * @param ctx channel handler context.
      * @param cmd request command.
+     * 利用pair将处理器和线程池绑定起来，达到了rocketmq中提到的多线程池，避免影响io线程*
      */
     public void processRequestCommand(final ChannelHandlerContext ctx, final RemotingCommand cmd) {
         final Pair<NettyRequestProcessor, ExecutorService> matched = this.processorTable.get(cmd.getCode());
@@ -351,7 +352,8 @@ public abstract class NettyRemotingAbstract {
 
     /**
      * Process response from remote peer to the previous issued requests.
-     * 处理响应
+     * 处理响应， 对于client端而言，是在io线程中完成
+     * 为了提高性能，会交给回调线程池来完成*
      * @param ctx channel handler context.
      * @param cmd response command instance.
      */
@@ -364,6 +366,7 @@ public abstract class NettyRemotingAbstract {
             if (responseFuture.getInvokeCallback() != null) {
                 executeInvokeCallback(responseFuture);
             } else {
+                // 没有回调方法的都应该是同步方法，同步方法会等待，所以这里putRespose内部还有countdown。 及时唤醒阻塞等待的同步请求
                 responseFuture.putResponse(cmd);
                 responseFuture.release();
             }
@@ -375,12 +378,16 @@ public abstract class NettyRemotingAbstract {
 
     /**
      * Execute callback in callback executor. If callback executor is null, run directly in current thread
+     * 如果有回调，则放入线程池中完成， 如果没有就直接当前io线程完成*
+     * 执行回调就好好执行回调，不要执行回调时又调用release*
      */
     private void executeInvokeCallback(final ResponseFuture responseFuture) {
         boolean runInThisThread = false;
         ExecutorService executor = this.getCallbackExecutor();
+
         if (executor != null && !executor.isShutdown()) {
             try {
+                // 尽量将回调交给业务线程来完成，不影响IO线程
                 executor.submit(() -> {
                     try {
                         responseFuture.executeInvokeCallback();
@@ -400,6 +407,7 @@ public abstract class NettyRemotingAbstract {
 
         if (runInThisThread) {
             try {
+                // 回调线程池执行异常之后，会转交给当前io线程来完成，我认为这里应该要考虑超时，如果超时了，就应该直接返回
                 responseFuture.executeInvokeCallback();
             } catch (Throwable e) {
                 log.warn("execute callback in this thread exception", e);
@@ -441,21 +449,28 @@ public abstract class NettyRemotingAbstract {
      * This method is periodically invoked to scan and expire deprecated request.
      * </p>
      */
-    public void scanResponseTable() {
+    public long scanResponseTable() {
         final List<ResponseFuture> rfList = new LinkedList<>();
+        // 这个table里面会不会存在 同步的请求，会存在，但是超过超时时间+1的集合中，不会存在同步请求，都是异步请求，都是会携带回调方法的。
         Iterator<Entry<Integer, ResponseFuture>> it = this.responseTable.entrySet().iterator();
+        // 扫描超时的数据，那么其实可以记录每次遍历的最小时间，选择睡眠时间，这个也是基于时间轮实现的，那么完全可以自定义扫描时间
+        long minDelayTime = 3000; // 默认为1000ms
+        long diffTime, nowTime;
         while (it.hasNext()) {
             Entry<Integer, ResponseFuture> next = it.next();
             ResponseFuture rep = next.getValue();
-
-            if ((rep.getBeginTimestamp() + rep.getTimeoutMillis() + 1000) <= System.currentTimeMillis()) {
+            nowTime = System.currentTimeMillis();
+            diffTime = (rep.getBeginTimestamp() + rep.getTimeoutMillis() + 1000) - nowTime;
+            if (diffTime <= 0) {
                 rep.release();
                 it.remove();
                 rfList.add(rep);
                 log.warn("remove timeout request, " + rep);
+            }else {
+                minDelayTime = Math.min(minDelayTime, diffTime);
             }
         }
-
+        nowTime = System.currentTimeMillis();
         for (ResponseFuture rf : rfList) {
             try {
                 executeInvokeCallback(rf);
@@ -463,6 +478,10 @@ public abstract class NettyRemotingAbstract {
                 log.warn("scanResponseTable, operationComplete Exception", e);
             }
         }
+        diffTime = System.currentTimeMillis() - nowTime;
+        minDelayTime = Math.min(minDelayTime, diffTime);
+
+        return minDelayTime;
     }
 
     public RemotingCommand invokeSyncImpl(final Channel channel, final RemotingCommand request,

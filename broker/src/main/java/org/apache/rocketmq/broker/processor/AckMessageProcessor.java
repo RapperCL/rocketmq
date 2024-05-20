@@ -197,6 +197,7 @@ public class AckMessageProcessor implements NettyRequestProcessor {
                 if (ackOffset < oldOffset) {
                     return;
                 }
+                // 光加锁，没有超时机制？
                 while (!this.brokerController.getPopMessageProcessor().getQueueLockManager().tryLock(lockKey)) {
                 }
                 try {

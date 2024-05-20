@@ -38,6 +38,7 @@ public class FutureUtils {
         return appendNextFuture(future, new CompletableFuture<>(), executor);
     }
 
+
     public static <T> CompletableFuture<T> completeExceptionally(Throwable t) {
         CompletableFuture<T> future = new CompletableFuture<>();
         future.completeExceptionally(t);

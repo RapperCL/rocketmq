@@ -122,10 +122,11 @@ public class TimerMessageStore {
     private TimerFlushService timerFlushService;
 
     protected volatile long currReadTimeMs;
+    // 记录的是当前写入timeLog中的时间
     protected volatile long currWriteTimeMs;
     protected volatile long preReadTimeMs;
     protected volatile long commitReadTimeMs;
-    protected volatile long currQueueOffset; //only one queue that is 0
+    protected volatile long currQueueOffset; //only one queue that is 0  防止伪共享优化， 更多的是单写多读，不需要考虑伪共享
     protected volatile long commitQueueOffset;
     protected volatile long lastCommitReadTimeMs;
     protected volatile long lastCommitQueueOffset;
@@ -215,7 +216,7 @@ public class TimerMessageStore {
         dequeueWarmService = new TimerDequeueWarmService();
         dequeueGetService = new TimerDequeueGetService();
         timerFlushService = new TimerFlushService();
-
+        // 哦，也考虑了节点压力的问题，于是会根据配置选择创建多个service，但共用了同一个queue，就很鸡肋，竞争加大。
         int getThreadNum = Math.max(storeConfig.getTimerGetMessageThreadNum(), 1);
         dequeueGetMessageServices = new TimerDequeueGetMessageService[getThreadNum];
         for (int i = 0; i < dequeueGetMessageServices.length; i++) {
@@ -627,10 +628,13 @@ public class TimerMessageStore {
         if (!isRunningEnqueue()) {
             return false;
         }
+        // delay 1 延迟消息设计成了单分区主题, 写入消息时，如果是延迟消息，则写入到该topic中，单分区。
+        // 这是是从延迟主题中取出消息写入到时间轮log的处理queue中
         ConsumeQueue cq = (ConsumeQueue) this.messageStore.getConsumeQueue(TIMER_TOPIC, queueId);
         if (null == cq) {
             return false;
         }
+        // currQueueOffset 延迟消息的逻辑位移， 每条消息占20kb，于是这里就基于offset/20, 代表写入了多少个消息
         if (currQueueOffset < cq.getMinOffsetInQueue()) {
             LOGGER.warn("Timer currQueueOffset:{} is smaller than minOffsetInQueue:{}",
                 currQueueOffset, cq.getMinOffsetInQueue());
@@ -649,6 +653,7 @@ public class TimerMessageStore {
                     long offsetPy = bufferCQ.getByteBuffer().getLong();
                     int sizePy = bufferCQ.getByteBuffer().getInt();
                     bufferCQ.getByteBuffer().getLong(); //tags code
+                    // delay 2 根据offset + size 从commitLog中获取消息
                     MessageExt msgExt = getMessageByCommitOffset(offsetPy, sizePy);
                     if (null == msgExt) {
                         perfCounterTicks.getCounter("enqueue_get_miss");
@@ -658,6 +663,8 @@ public class TimerMessageStore {
                         long delayedTime = Long.parseLong(msgExt.getProperty(TIMER_OUT_MS));
                         // use CQ offset, not offset in Message
                         msgExt.setQueueOffset(offset + (i / ConsumeQueue.CQ_STORE_UNIT_SIZE));
+                        // delay 3 构建延迟请求，写入到Queue中，会有其他线程来负责获取需要延迟的消息
+                        // 这里的时间是不是有问题，开始时间应该取消息的产生时间
                         TimerRequest timerRequest = new TimerRequest(offsetPy, sizePy, delayedTime, System.currentTimeMillis(), MAGIC_DEFAULT, msgExt);
                         // System.out.printf("build enqueue request, %s%n", timerRequest);
                         while (!enqueuePutQueue.offer(timerRequest, 3, TimeUnit.SECONDS)) {
@@ -697,16 +704,44 @@ public class TimerMessageStore {
         LOGGER.debug("Do enqueue [{}] [{}]", new Timestamp(delayedTime), messageExt);
         //copy the value first, avoid concurrent problem
         long tmpWriteTimeMs = currWriteTimeMs;
+        // 判断轮数 timerRollWindowSlots 所有的格口， 每个格口的时间= 一轮的耗时
+        long intervalMs =  timerRollWindowSlots * precisionMs;
         boolean needRoll = delayedTime - tmpWriteTimeMs >= (long) timerRollWindowSlots * precisionMs;
+        long diffTime = delayedTime - tmpWriteTimeMs;
+
         int magic = MAGIC_DEFAULT;
-        if (needRoll) {
+        //if (needRoll) {
+        // 需要滚动，当前是不满足的，为什么不记录在magicRoll中，将round也记录一下，
+        if(diffTime >= intervalMs){
+
             magic = magic | MAGIC_ROLL;
-            if (delayedTime - tmpWriteTimeMs - (long) timerRollWindowSlots * precisionMs < (long) timerRollWindowSlots / 3 * precisionMs) {
-                //give enough time to next roll
-                delayedTime = tmpWriteTimeMs + (long) (timerRollWindowSlots / 2) * precisionMs;
-            } else {
-                delayedTime = tmpWriteTimeMs + (long) timerRollWindowSlots * precisionMs;
+            // 多出的时间小于1/3，则将延迟时间调整为1/2？
+            /**
+             *问题背景：如果延迟时间delayedTime非常接近于当前写入时间tmpWriteTimeMs加上当前时间轮满转所需的时间（即(long) timerRollWindowSlots * precisionMs），
+             * * 这意味着这条消息几乎会立即到期或在下一个时间窗口开始时到期，这可能导致在时间窗口切换时，大量消息同时准备投递，增加了瞬间的处理压力。
+             *
+             * 解决策略：为了缓解这个问题，代码检查如果delayedTime与下一次时间窗口切换的边界过近（小于当前时间窗口长度的4/3），就将消息的延迟时间适当地调整至更远的未来，
+             * * 即tmpWriteTimeMs + (long) timerRollWindowSlots / 2 * precisionMs。这样的调整确保了消息不会立即或在下一个时间窗口刚开始时到达，
+             * * 而是给予至少半个时间窗口长度的缓冲时间。* *
+             * 压力大，为什么不考虑多窗口？ 默认4个窗口，和线程绑定*
+             *
+             * 那rmq应该是支持最大28天延迟，两个slots进行交替，不是环形，因为这里需要考虑到对应的文件？* *
+             */
+            // 0 ~ 1/3
+            delayedTime = tmpWriteTimeMs + diffTime % intervalMs + intervalMs / 3;
+            if(diffTime % intervalMs > intervalMs / 3){
+                delayedTime += intervalMs / 3;
             }
+//            if (diffTime % intervalMs < intervalMs / 3) {
+//                //give enough time to next roll 为什么要给足够的时间， 这样会不会导致延迟增加
+//                //delayedTime = tmpWriteTimeMs + (long) timerRollWindowSlots / 2 * precisionMs;
+//                delayedTime = tmpWriteTimeMs + diffTime % intervalMs + intervalMs / 3;
+//            } else {
+//                delayedTime = tmpWriteTimeMs + diffTime % intervalMs + intervalMs * 2 / 3;
+//                //强制将延迟时间限制在2倍的时间格口中，这样又会导致消息集中
+//                delayedTime = tmpWriteTimeMs + (long) timerRollWindowSlots * precisionMs;
+//                delayedTime = tmpWriteTimeMs + diffTime % intervalMs + intervalMs * 2 / 3;
+//            }
         }
         boolean isDelete = messageExt.getProperty(TIMER_DELETE_UNIQUE_KEY) != null;
         if (isDelete) {
@@ -720,11 +755,13 @@ public class TimerMessageStore {
         tmpBuffer.putLong(slot.lastPos); //prev pos
         tmpBuffer.putInt(magic); //magic
         tmpBuffer.putLong(tmpWriteTimeMs); //currWriteTime
+        // 可以看到，其实并没有修改延迟时间，只是考虑将打散放到某个slot中
         tmpBuffer.putInt((int) (delayedTime - tmpWriteTimeMs)); //delayTime
         tmpBuffer.putLong(offsetPy); //offset
         tmpBuffer.putInt(sizePy); //size
         tmpBuffer.putInt(hashTopicForMetrics(realTopic)); //hashcode of real topic
         tmpBuffer.putLong(0); //reserved value, just set to 0 now
+        // delay 6 将数据写入到其中， 同步写入，这个相对比较耗时一些
         long ret = timerLog.append(tmpBuffer.array(), 0, TimerLog.UNIT_SIZE);
         if (-1 != ret) {
             // If it's a delete message, then slot's total num -1
@@ -873,6 +910,7 @@ public class TimerMessageStore {
             return -1;
         }
 
+        // delay 8 取出到期的延迟请求放入Queue中，后面会有其他线程从中获取延迟请求，并取出commitlog的数据
         Slot slot = timerWheel.getSlot(currReadTimeMs);
         if (-1 == slot.timeMs) {
             moveReadTime();
@@ -938,23 +976,21 @@ public class TimerMessageStore {
             }
             CountDownLatch deleteLatch = new CountDownLatch(deleteMsgStack.size());
             //read the delete msg: the msg used to mark another msg is deleted
-            for (List<TimerRequest> deleteList : splitIntoLists(deleteMsgStack)) {
-                for (TimerRequest tr : deleteList) {
-                    tr.setLatch(deleteLatch);
-                }
-                dequeueGetQueue.put(deleteList);
-            }
+            splitIntoLists(deleteMsgStack,dequeueGetQueue, deleteLatch);
+//            for (List<TimerRequest> deleteList : splitIntoLists(deleteMsgStack,dequeueGetQueue, deleteLatch)) {
+//
+//                dequeueGetQueue.put(deleteList);
+//            }
             //do we need to use loop with tryAcquire
             checkDequeueLatch(deleteLatch, currReadTimeMs);
 
             CountDownLatch normalLatch = new CountDownLatch(normalMsgStack.size());
-            //read the normal msg
-            for (List<TimerRequest> normalList : splitIntoLists(normalMsgStack)) {
-                for (TimerRequest tr : normalList) {
-                    tr.setLatch(normalLatch);
-                }
-                dequeueGetQueue.put(normalList);
-            }
+            // design read the normal msg 集合划分-避免当个slot的数据量过大，这样下游存在多线程处理时，
+//            for (List<TimerRequest> normalList : splitIntoLists(normalMsgStack, normalLatch)) {
+//
+//                dequeueGetQueue.put(normalList);
+//            }
+            splitIntoLists(normalMsgStack,dequeueGetQueue, normalLatch);
             checkDequeueLatch(normalLatch, currReadTimeMs);
             // if master -> slave -> master, then the read time move forward, and messages will be lossed
             if (dequeueStatusChangeFlag) {
@@ -973,40 +1009,85 @@ public class TimerMessageStore {
         return 1;
     }
 
-    private List<List<TimerRequest>> splitIntoLists(List<TimerRequest> origin) {
+    private void splitIntoLists(List<TimerRequest> origin,BlockingQueue<List<TimerRequest>> queue, CountDownLatch latch) {
         //this method assume that the origin is not null;
-        List<List<TimerRequest>> lists = new LinkedList<>();
-        if (origin.size() < 100) {
-            lists.add(origin);
-            return lists;
-        }
-        List<TimerRequest> currList = null;
+
+        // 为什么不是一个整数 100 而是99
+//        if (origin.size() <= 100) {
+//            for (TimerRequest tr : origin) {
+//                 tr.setLatch(latch);
+//            }
+//            lists.add(origin);
+//            return lists;
+//        }
+        List<TimerRequest> currList = new LinkedList<>();
         int fileIndexPy = -1;
         int msgIndex = 0;
         for (TimerRequest tr : origin) {
-            if (fileIndexPy != tr.getOffsetPy() / commitLogFileSize) {
-                msgIndex = 0;
-                if (null != currList && currList.size() > 0) {
-                    lists.add(currList);
+            tr.setLatch(latch);
+            if(origin.size() > 100){
+                if(fileIndexPy != tr.getOffsetPy() / commitLogFileSize){
+                    if(currList.size() > 0){
+                        queue.add(currList);
+                        currList = new LinkedList<>();
+                        msgIndex = 0;
+                    }
+                    fileIndexPy = (int) (tr.getOffsetPy() / commitLogFileSize);
                 }
-                currList = new LinkedList<>();
                 currList.add(tr);
-                fileIndexPy = (int) (tr.getOffsetPy() / commitLogFileSize);
-            } else {
-                currList.add(tr);
-                if (++msgIndex % 2000 == 0) {
-                    lists.add(currList);
+                if (++msgIndex % 2000 == 0 ) {
+                    queue.add(currList);
                     currList = new ArrayList<>();
                 }
             }
         }
-        if (null != currList && currList.size() > 0) {
-            lists.add(currList);
+
+        if (currList.size() > 0) {
+            queue.add(currList);
         }
-        return lists;
+
+
+//        for (TimerRequest tr : origin) {
+////
+////            if (fileIndexPy != tr.getOffsetPy() / commitLogFileSize) {
+////                msgIndex = 0;
+////                if (null != currList && currList.size() > 0) {
+////                    lists.add(currList);
+////                }
+////                currList = new LinkedList<>();
+////                currList.add(tr);
+////                fileIndexPy = (int) (tr.getOffsetPy() / commitLogFileSize);
+////            } else {
+////                currList.add(tr);
+////                if (++msgIndex % 2000 == 0) {
+////                    lists.add(currList);
+////                    currList = new ArrayList<>();
+////                }
+////            }
+//            tr.setLatch(latch);
+//            // todo 拆分优化
+//            if(fileIndexPy != tr.getOffsetPy() / commitLogFileSize){
+//                if(currList.size() > 0){
+//                    lists.add(currList);
+//                    currList = new LinkedList<>();
+//                    msgIndex = 0;
+//                }
+//                fileIndexPy = (int) (tr.getOffsetPy() / commitLogFileSize);
+//            }
+//            currList.add(tr);
+//            if (++msgIndex % 2000 == 0 ) {
+//                lists.add(currList);
+//                currList = new ArrayList<>();
+//            }
+//        }
+//        if (currList.size() > 0) {
+//            lists.add(currList);
+//        }
+//        return lists;
     }
 
     private MessageExt getMessageByCommitOffset(long offsetPy, int sizePy) {
+        // todo 为什么要默认重试3次
         for (int i = 0; i < 3; i++) {
             MessageExt msgExt = null;
             bufferLocal.get().position(0);
@@ -1086,6 +1167,7 @@ public class TimerMessageStore {
                 }
             }
             Thread.sleep(50);
+            // delay 9 写入到原始消息中
             putMessageResult = messageStore.putMessage(message);
             LOGGER.warn("Retrying to do put timer msg retryNum:{} putRes:{} msg:{}", retryNum, putMessageResult, message);
         }
@@ -1298,6 +1380,8 @@ public class TimerMessageStore {
         /**
          * collect the requests
          */
+        // delay 5 看到没，这里会从queue中取出延迟请求
+        // todo 没有消息时，10ms一次，有消息时，则调整拉取时间，10个一批进行拉取。 那为什么不将集合初始化为10
         protected List<TimerRequest> fetchTimerRequests() throws InterruptedException {
             List<TimerRequest> trs = null;
             TimerRequest firstReq = enqueuePutQueue.poll(10, TimeUnit.MILLISECONDS);
@@ -1322,9 +1406,12 @@ public class TimerMessageStore {
             try {
                 perfCounterTicks.startTick(ENQUEUE_PUT);
                 DefaultStoreMetricsManager.incTimerEnqueueCount(getRealTopic(req.getMsg()));
+                // currWriteTimeMs 代表当前时间轮的index时间？
                 if (shouldRunningDequeue && req.getDelayTime() < currWriteTimeMs) {
+                    // 这里应该是代表在写入到timeLog时，就已经到期了，于是写入到putQueue中，后面会取出这些数据，查询原始消息重新进行投递。
                     dequeuePutQueue.put(req);
                 } else {
+                    // 还未到期的，于是就写入
                     boolean doEnqueueRes = doEnqueue(
                         req.getOffsetPy(), req.getSizePy(), req.getDelayTime(), req.getMsg());
                     req.idempotentRelease(doEnqueueRes || storeConfig.isTimerSkipUnknownError());
@@ -1340,6 +1427,7 @@ public class TimerMessageStore {
             }
         }
 
+        // delay 4 负责从queue中取出延迟消息请求，将其写入到timeLog中，然后再写入时间轮queue中
         protected void fetchAndPutTimerRequest() throws Exception {
             long tmpCommitQueueOffset = currQueueOffset;
             List<TimerRequest> trs = this.fetchTimerRequests();
@@ -1353,8 +1441,10 @@ public class TimerMessageStore {
                 CountDownLatch latch = new CountDownLatch(trs.size());
                 for (TimerRequest req : trs) {
                     req.setLatch(latch);
+                    // delay 5 将延迟请求写入到timeLog中
                     this.putMessageToTimerWheel(req);
                 }
+                // latch作为异步阻塞等待机制
                 checkDequeueLatch(latch, -1);
                 boolean allSuccess = trs.stream().allMatch(TimerRequest::isSucc);
                 if (allSuccess) {
@@ -1398,6 +1488,7 @@ public class TimerMessageStore {
                         waitForRunning(1000);
                         continue;
                     }
+                    // 未获取到任务时的睡眠时间应该= 当前时间距离下一个slot的时间。
                     if (-1 == TimerMessageStore.this.dequeue()) {
                         waitForRunning(100L * precisionMs / 1000);
                     }
@@ -1422,6 +1513,7 @@ public class TimerMessageStore {
         }
     }
 
+    // delay 9 从队列中取出延迟请求，此时的延迟请求中包含了原始的消息，这里进行重新投递即可。
     public class TimerDequeuePutMessageService extends AbstractStateService {
 
         @Override
@@ -1502,6 +1594,7 @@ public class TimerMessageStore {
             while (!this.isStopped()) {
                 try {
                     setState(AbstractStateService.WAITING);
+                    // delay 8 从queue中取出到期了的延迟请求，并从commitLog中获取数据
                     List<TimerRequest> trs = dequeueGetQueue.poll(100L * precisionMs / 1000, TimeUnit.MILLISECONDS);
                     if (null == trs || trs.size() == 0) {
                         continue;
@@ -1512,6 +1605,7 @@ public class TimerMessageStore {
                         boolean doRes = false;
                         try {
                             long start = System.currentTimeMillis();
+                            // 从延迟队列的commitlog中读取对应的消息
                             MessageExt msgExt = getMessageByCommitOffset(tr.getOffsetPy(), tr.getSizePy());
                             if (null != msgExt) {
                                 if (needDelete(tr.getMagic()) && !needRoll(tr.getMagic())) {
@@ -1532,6 +1626,7 @@ public class TimerMessageStore {
                                     } else {
                                         tr.setMsg(msgExt);
                                         while (!isStopped() && !doRes) {
+                                            // 将消息写入到该queue中，后面会有其他线程从里面取出，并重新投递
                                             doRes = dequeuePutQueue.offer(tr, 3, TimeUnit.SECONDS);
                                         }
                                     }

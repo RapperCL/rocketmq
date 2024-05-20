@@ -102,6 +102,7 @@ public class TimerRequest {
     public void idempotentRelease(boolean succ) {
         this.succ = succ;
         if (!released && latch != null) {
+            // 是否通过cas优化？ 当前线程创建的对象，应该就不需要了
             released = true;
             latch.countDown();
         }

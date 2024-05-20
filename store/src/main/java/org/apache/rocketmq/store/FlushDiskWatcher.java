@@ -35,6 +35,9 @@ public class FlushDiskWatcher extends ServiceThread {
     }
 
     @Override
+    // 异步设计 需要额外搞个监听的吗？  额外增加了存储，而且睡眠时间没有分段睡眠，或者说有唤醒机制。
+    // 这里不应该直接sleep，应该换用waiter？ 这里的目的应该是及时返回超时的吗？ 那应该按照优先级队列，
+    // 以deadline排序， 或者应该直接用时间轮替换掉，每个flushDisk都通过时间轮挂载一个延迟任务
     public void run() {
         while (!isStopped()) {
             GroupCommitRequest request = null;

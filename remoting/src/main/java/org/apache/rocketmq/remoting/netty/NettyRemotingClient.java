@@ -232,12 +232,13 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
         TimerTask timerTaskScanResponseTable = new TimerTask() {
             @Override
             public void run(Timeout timeout) {
+                long delayTime = 1000;
                 try {
-                    NettyRemotingClient.this.scanResponseTable();
+                    delayTime = NettyRemotingClient.this.scanResponseTable();
                 } catch (Throwable e) {
                     LOGGER.error("scanResponseTable exception", e);
                 } finally { // 每秒执行一次
-                    timer.newTimeout(this, 1000, TimeUnit.MILLISECONDS);
+                    timer.newTimeout(this, delayTime, TimeUnit.MILLISECONDS);
                 }
             }
         };
@@ -737,6 +738,9 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
         return null;
     }
 
+    private boolean ready(Channel channel){
+        return  channel != null && channel.isActive();
+    }
     @Override
     public void invokeAsync(String addr, RemotingCommand request, long timeoutMillis, InvokeCallback invokeCallback)
         throws InterruptedException, RemotingConnectException, RemotingTooMuchRequestException, RemotingTimeoutException,
@@ -744,9 +748,11 @@ public class NettyRemotingClient extends NettyRemotingAbstract implements Remoti
         long beginStartTime = System.currentTimeMillis();
         final Channel channel = this.getAndCreateChannel(addr);
         String channelRemoteAddr = RemotingHelper.parseChannelRemoteAddr(channel);
-        if (channel != null && channel.isActive()) {
+        // 完全可以将这些操作channel != null && channel.isActive()封装为一个方法
+        if (ready(channel)) {
             try {
                 doBeforeRpcHooks(channelRemoteAddr, request);
+                // 或者将时间独立为一个延迟任务，任务到期时，阻断该操作即可。
                 long costTime = System.currentTimeMillis() - beginStartTime;
                 if (timeoutMillis < costTime) {
                     throw new RemotingTooMuchRequestException("invokeAsync call the addr[" + channelRemoteAddr + "] timeout");

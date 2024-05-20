@@ -651,7 +651,6 @@ public class PopBufferMergeService extends ServiceThread {
         PopCheckPoint point = pointWrapper.getCk();
         MessageExtBrokerInner msgInner = new MessageExtBrokerInner();
         final AckMsg ackMsg = new AckMsg();
-
         ackMsg.setAckOffset(point.ackOffsetByIndex(msgIndex));
         ackMsg.setStartOffset(point.getStartOffset());
         ackMsg.setConsumerGroup(point.getCId());

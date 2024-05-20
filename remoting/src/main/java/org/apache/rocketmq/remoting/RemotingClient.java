@@ -53,6 +53,7 @@ public interface RemotingClient extends RemotingService {
         try {
             invokeAsync(addr, request, timeoutMillis, responseFuture -> {
                 RemotingCommand response = responseFuture.getResponseCommand();
+                // response ！= null 就代表完成了？
                 if (response != null) {
                     future.complete(response);
                 } else {

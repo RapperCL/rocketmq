@@ -267,6 +267,9 @@ public class DefaultMQPullConsumerImpl implements MQConsumerInner {
         this.pullAPIWrapper.processPullResult(mq, pullResult, subscriptionData);
         //If namespace is not null , reset Topic without namespace.
         this.resetTopic(pullResult.getMsgFoundList());
+        /**
+         * 这里仅仅是拉取到了消息，为什么会认为消费成功了？*
+         */
         if (!this.consumeMessageHookList.isEmpty()) {
             ConsumeMessageContext consumeMessageContext = null;
             consumeMessageContext = new ConsumeMessageContext();

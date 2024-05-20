@@ -70,7 +70,7 @@ public class ClientConfig {
     private boolean useTLS = TlsSystemConfig.tlsEnable;
 
     private String socksProxyConfig = System.getProperty(SOCKS_PROXY_CONFIG, "{}");
-
+    // todo 写死了， 根据topic寻找路由信息， 客户端接口的超时时间
     private int mqClientApiTimeout = 3 * 1000;
 
     private LanguageCode language = LanguageCode.JAVA;

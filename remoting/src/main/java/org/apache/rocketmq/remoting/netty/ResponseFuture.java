@@ -90,6 +90,10 @@ public class ResponseFuture {
         this.countDownLatch.countDown();
     }
 
+    public void notifyWait(){
+        this.countDownLatch.countDown();
+    }
+
     public long getBeginTimestamp() {
         return beginTimestamp;
     }
