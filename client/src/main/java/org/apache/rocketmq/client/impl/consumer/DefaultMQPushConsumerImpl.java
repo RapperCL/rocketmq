@@ -1495,6 +1495,8 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
 
         long decThreshold = (long) (adjustThreadPoolNumsThreshold * 0.8);
 
+        // 达到1w之后，进行增加。 整体线程池数量达到1w。这样的效果很奇怪，基于现在的设计，并不能很好的应对突然流量，
+        // 每分钟执行一次
         if (computeAccTotal >= incThreshold) {
             this.consumeMessageService.incCorePoolSize();
         }

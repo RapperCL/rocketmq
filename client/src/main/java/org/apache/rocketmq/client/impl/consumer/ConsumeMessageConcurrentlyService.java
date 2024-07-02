@@ -220,6 +220,12 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
                 }
             }
         }
+        printLogInfo();
+    }
+
+    public void printLogInfo(){
+        System.out.println(" spacex-consumerExecutor coreSize: " + consumeExecutor.getCorePoolSize() +
+               "maxSize: " + consumeExecutor.getPoolSize() + " queueSize: " +consumeExecutor.getQueue().size());
     }
 
     @Override

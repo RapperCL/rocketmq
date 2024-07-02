@@ -63,7 +63,7 @@ public class PushConsumerImplTest {
     }
 
     @Test
-    public void testConsumeMessage() {
+    public void testConsumeMessage() throws InterruptedException {
         final byte[] testBody = new byte[] {'a', 'b'};
 
         MessageExt consumedMsg = new MessageExt();

@@ -31,5 +31,5 @@ public interface MessageListenerConcurrently extends MessageListener {
      * @return The consume status
      */
     ConsumeConcurrentlyStatus consumeMessage(final List<MessageExt> msgs,
-        final ConsumeConcurrentlyContext context);
+        final ConsumeConcurrentlyContext context) throws InterruptedException;
 }
