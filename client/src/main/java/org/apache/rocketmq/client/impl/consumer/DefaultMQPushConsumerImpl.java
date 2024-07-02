@@ -1579,4 +1579,8 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
         }
         return defaultMQPushConsumer.getMessageQueueListener();
     }
+
+    public int getSubscriptionInnerSize() {
+        return this.rebalanceImpl.getSubscriptionInner().size();
+    }
 }

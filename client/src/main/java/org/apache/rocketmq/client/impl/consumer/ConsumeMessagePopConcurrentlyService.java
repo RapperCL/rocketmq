@@ -68,7 +68,8 @@ public class ConsumeMessagePopConcurrentlyService implements ConsumeMessageServi
 
         this.defaultMQPushConsumer = this.defaultMQPushConsumerImpl.getDefaultMQPushConsumer();
         this.consumerGroup = this.defaultMQPushConsumer.getConsumerGroup();
-        this.consumeRequestQueue = new LinkedBlockingQueue<>();
+        int queueSize = this.defaultMQPushConsumer.getPopThresholdForQueue() * this.defaultMQPushConsumerImpl.getSubscriptionInnerSize();
+        this.consumeRequestQueue = new LinkedBlockingQueue<>(queueSize);
 
         this.consumeExecutor = new ThreadPoolExecutor(
             this.defaultMQPushConsumer.getConsumeThreadMin(),
