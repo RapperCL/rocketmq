@@ -187,8 +187,7 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
     public void submitConsumeRequest(
         final List<MessageExt> msgs,
         final ProcessQueue processQueue,
-        final MessageQueue messageQueue,
-        final boolean dispatchToConsume) {
+        final MessageQueue messageQueue) {
         final int consumeBatchSize = this.defaultMQPushConsumer.getConsumeMessageBatchMaxSize();
         if (msgs.size() <= consumeBatchSize) {
             ConsumeRequest consumeRequest = new ConsumeRequest(msgs, processQueue, messageQueue);
@@ -338,7 +337,7 @@ public class ConsumeMessageConcurrentlyService implements ConsumeMessageService 
 
             @Override
             public void run() {
-                ConsumeMessageConcurrentlyService.this.submitConsumeRequest(msgs, processQueue, messageQueue, true);
+                ConsumeMessageConcurrentlyService.this.submitConsumeRequest(msgs, processQueue, messageQueue);
             }
         }, 5000, TimeUnit.MILLISECONDS);
     }

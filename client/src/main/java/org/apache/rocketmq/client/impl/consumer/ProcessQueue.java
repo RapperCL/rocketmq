@@ -21,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -58,7 +59,7 @@ public class ProcessQueue {
     private volatile long lastConsumeTimestamp = System.currentTimeMillis();
     private volatile boolean locked = false;
     private volatile long lastLockTimestamp = System.currentTimeMillis();
-    private volatile boolean consuming = false;
+    private final AtomicBoolean consumingFlag = new AtomicBoolean(false);
     private volatile long msgAccCnt = 0;
 
     public boolean isLockExpired() {
@@ -67,6 +68,18 @@ public class ProcessQueue {
 
     public boolean isPullExpired() {
         return (System.currentTimeMillis() - this.lastPullTimestamp) > PULL_MAX_IDLE_TIME;
+    }
+
+    public boolean tryConsume(){
+        return consumingFlag.compareAndSet(false, true);
+    }
+
+    public void resetConsume(){
+        consumingFlag.set(false);
+    }
+
+    public boolean isConsuming(){
+        return this.consumingFlag.get();
     }
 
     /**
@@ -126,8 +139,12 @@ public class ProcessQueue {
         }
     }
 
-    public boolean putMessage(final List<MessageExt> msgs) {
-        boolean dispatchToConsume = false;
+    /**
+     * 单一职责优化*
+     * @param msgs
+     */
+    public void putMessage(final List<MessageExt> msgs) {
+
         try {
             this.treeMapLock.writeLock().lockInterruptibly();
             try {
@@ -141,11 +158,6 @@ public class ProcessQueue {
                     }
                 }
                 msgCount.addAndGet(validMsgCnt);
-
-                if (!msgTreeMap.isEmpty() && !this.consuming) {
-                    dispatchToConsume = true;
-                    this.consuming = true;
-                }
 
                 if (!msgs.isEmpty()) {
                     MessageExt messageExt = msgs.get(msgs.size() - 1);
@@ -163,8 +175,6 @@ public class ProcessQueue {
         } catch (InterruptedException e) {
             log.error("putMessage exception", e);
         }
-
-        return dispatchToConsume;
     }
 
     public long getMaxSpan() {
@@ -320,10 +330,6 @@ public class ProcessQueue {
                             break;
                         }
                     }
-                }
-
-                if (result.isEmpty()) {
-                    consuming = false;
                 }
             } finally {
                 this.treeMapLock.writeLock().unlock();

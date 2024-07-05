@@ -39,8 +39,7 @@ public interface ConsumeMessageService {
     void submitConsumeRequest(
         final List<MessageExt> msgs,
         final ProcessQueue processQueue,
-        final MessageQueue messageQueue,
-        final boolean dispathToConsume);
+        final MessageQueue messageQueue);
 
     void submitPopConsumeRequest(
         final List<MessageExt> msgs,
